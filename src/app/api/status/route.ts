@@ -31,7 +31,6 @@ export async function GET() {
     NEXT_PUBLIC_SUPABASE_ANON_KEY: Boolean(anonKey),
     SUPABASE_SERVICE_ROLE_KEY: Boolean(serviceKey),
     url_auto_fixed: Boolean(rawSupabaseUrl && rawSupabaseUrl.trim() !== supabaseUrl),
-    normalized_url: supabaseUrl || null,
   };
 
   const isConfigured = Boolean(supabaseUrl && (serviceKey || anonKey));

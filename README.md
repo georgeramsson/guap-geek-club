@@ -99,7 +99,7 @@ flowchart TD
 
 ```env
 # 1. Подключение к облачной базе Supabase
-NEXT_PUBLIC_SUPABASE_URL=https://cadsrvvtvkjufjyranfz.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://ваш-проект.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=ваш_anon_public_key
 SUPABASE_SERVICE_ROLE_KEY=ваш_service_role_secret_key
 
