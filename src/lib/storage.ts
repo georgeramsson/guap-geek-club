@@ -22,8 +22,37 @@ const TMP_DB_FILE = path.join('/tmp', 'guap_db.json');
 // In-memory cache fallback for serverless environments (Vercel)
 let memoryDb: LocalDatabase | null = null;
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+/**
+ * Очищает и нормализует URL проекта Supabase.
+ * Автоматически отрезает /rest/v1, /rest, trailing slashes,
+ * преобразует ссылки из личного кабинета и удаляет лишние пробелы.
+ */
+export function sanitizeSupabaseUrl(rawUrl?: string): string | undefined {
+  if (!rawUrl) return undefined;
+  let url = rawUrl.trim();
+
+  // Если вставили ссылку на дашборд Supabase вида https://supabase.com/dashboard/project/<ref>
+  const dashMatch = url.match(/supabase\.com\/dashboard\/project\/([a-z0-9_-]+)/i);
+  if (dashMatch) {
+    return `https://${dashMatch[1]}.supabase.co`;
+  }
+
+  // Восстанавливаем https:// если не указан протокол
+  if (!/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
+
+  // Отрезаем /rest/v1, /rest, /v1 и завершающие слэши
+  return url
+    .replace(/\/rest\/v1\/?$/i, '')
+    .replace(/\/rest\/?$/i, '')
+    .replace(/\/v1\/?$/i, '')
+    .replace(/\/+$/, '');
+}
+
+const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseUrl = sanitizeSupabaseUrl(rawSupabaseUrl);
+const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)?.trim();
 const isSupabaseEnabled = Boolean(supabaseUrl && supabaseKey);
 
 const supabase = isSupabaseEnabled
@@ -221,72 +250,7 @@ function isGameInPast(dateStr: string, status: string): boolean {
   return dateStr < today;
 }
 
-/**
- * Получить список всех игр с информацией о записях
- */
-export async function getGamesWithBookings(): Promise<GameWithBookings[]> {
-  if (isSupabaseEnabled && supabase) {
-    const { data: games, error: gamesErr } = await supabase
-      .from('games')
-      .select('*')
-      .order('date', { ascending: true });
-
-    if (gamesErr) {
-      console.error('[Supabase getGames error]:', gamesErr);
-      return [];
-    }
-
-    const { data: bookings, error: bookErr } = await supabase
-      .from('bookings')
-      .select('*')
-      .order('created_at', { ascending: true });
-
-    if (bookErr) {
-      console.error('[Supabase getBookings error]:', bookErr);
-    }
-
-    const allBookings: Booking[] = (bookings || []).map((b) => ({
-      id: b.id,
-      gameId: b.game_id,
-      name: b.name,
-      contact: b.contact,
-      comment: b.comment,
-      isWaitlist: b.is_waitlist,
-      createdAt: b.created_at,
-    }));
-
-    return (games || []).map((g) => {
-      const gameBookings = allBookings.filter((b) => b.gameId === g.id);
-      const players = gameBookings.filter((b) => !b.isWaitlist);
-      const waitlist = gameBookings.filter((b) => b.isWaitlist);
-      const maxP = g.max_players ?? 5;
-      const requiresB = g.requires_booking ?? (g.event_type !== 'open_boardgame');
-
-      return {
-        id: g.id,
-        title: g.title,
-        system: g.system,
-        master: g.master,
-        date: g.date,
-        time: g.time,
-        location: g.location,
-        maxPlayers: maxP,
-        description: g.description,
-        tags: g.tags || [],
-        status: g.status,
-        eventType: g.event_type || 'rpg',
-        requiresBooking: requiresB,
-        createdAt: g.created_at,
-        bookings: gameBookings,
-        playersCount: players.length,
-        waitlistCount: waitlist.length,
-        isFull: requiresB && maxP > 0 && players.length >= maxP,
-        isPast: isGameInPast(g.date, g.status),
-      };
-    });
-  }
-
-  // Локальный режим
+function getLocalGamesWithBookings(): GameWithBookings[] {
   const db = initLocalDb();
   return db.games.map((game) => {
     const gameBookings = db.bookings.filter((b) => b.gameId === game.id);
@@ -305,6 +269,80 @@ export async function getGamesWithBookings(): Promise<GameWithBookings[]> {
       isPast: isGameInPast(game.date, game.status),
     };
   });
+}
+
+/**
+ * Получить список всех игр с информацией о записях
+ */
+export async function getGamesWithBookings(): Promise<GameWithBookings[]> {
+  if (isSupabaseEnabled && supabase) {
+    try {
+      const { data: games, error: gamesErr } = await supabase
+        .from('games')
+        .select('*')
+        .order('date', { ascending: true });
+
+      if (gamesErr) {
+        console.error('[Supabase getGames error, falling back to local]:', gamesErr);
+        return getLocalGamesWithBookings();
+      }
+
+      const { data: bookings, error: bookErr } = await supabase
+        .from('bookings')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (bookErr) {
+        console.error('[Supabase getBookings error]:', bookErr);
+      }
+
+      const allBookings: Booking[] = (bookings || []).map((b) => ({
+        id: b.id,
+        gameId: b.game_id,
+        name: b.name,
+        contact: b.contact,
+        comment: b.comment,
+        isWaitlist: b.is_waitlist,
+        createdAt: b.created_at,
+      }));
+
+      return (games || []).map((g) => {
+        const gameBookings = allBookings.filter((b) => b.gameId === g.id);
+        const players = gameBookings.filter((b) => !b.isWaitlist);
+        const waitlist = gameBookings.filter((b) => b.isWaitlist);
+        const maxP = g.max_players ?? 5;
+        const requiresB = g.requires_booking ?? (g.event_type !== 'open_boardgame');
+
+        return {
+          id: g.id,
+          title: g.title,
+          system: g.system,
+          master: g.master,
+          date: g.date,
+          time: g.time,
+          location: g.location,
+          maxPlayers: maxP,
+          description: g.description,
+          tags: g.tags || [],
+          status: g.status,
+          eventType: g.event_type || 'rpg',
+          requiresBooking: requiresB,
+          createdAt: g.created_at,
+          bookings: gameBookings,
+          playersCount: players.length,
+          waitlistCount: waitlist.length,
+          isFull: requiresB && maxP > 0 && players.length >= maxP,
+          isPast: isGameInPast(g.date, g.status),
+        };
+      });
+    } catch (sbErr) {
+      console.error('[Supabase getGames exception, falling back to local]:', sbErr);
+      return getLocalGamesWithBookings();
+    }
+  }
+
+  // Локальный режим
+  return getLocalGamesWithBookings();
 }
 
 /**
@@ -571,46 +609,57 @@ export async function createGame(input: CreateGameInput): Promise<Game> {
   };
 
   if (isSupabaseEnabled && supabase) {
-    const { data, error } = await supabase
-      .from('games')
-      .insert({
-        title: newGame.title,
-        system: newGame.system,
-        master: newGame.master,
-        date: newGame.date,
-        time: newGame.time,
-        location: newGame.location,
-        max_players: newGame.maxPlayers,
-        description: newGame.description,
-        tags: newGame.tags,
-        status: newGame.status,
-        event_type: newGame.eventType,
-        requires_booking: newGame.requiresBooking,
-      })
-      .select()
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('games')
+        .insert({
+          title: newGame.title,
+          system: newGame.system,
+          master: newGame.master,
+          date: newGame.date,
+          time: newGame.time,
+          location: newGame.location,
+          max_players: newGame.maxPlayers,
+          description: newGame.description,
+          tags: newGame.tags,
+          status: newGame.status,
+          event_type: newGame.eventType,
+          requires_booking: newGame.requiresBooking,
+        })
+        .select()
+        .single();
 
-    if (error) {
-      console.error('[Supabase createGame error]:', error);
-      throw new Error('Failed to create game in database');
+      if (error) {
+        console.error('[Supabase createGame error, saving to local fallback]:', error);
+        const db = initLocalDb();
+        db.games.unshift(newGame);
+        saveLocalDb(db);
+        return newGame;
+      }
+
+      return {
+        id: data.id,
+        title: data.title,
+        system: data.system,
+        master: data.master,
+        date: data.date,
+        time: data.time,
+        location: data.location,
+        maxPlayers: data.max_players,
+        description: data.description,
+        tags: data.tags,
+        status: data.status,
+        eventType: data.event_type,
+        requiresBooking: data.requires_booking,
+        createdAt: data.created_at,
+      };
+    } catch (err) {
+      console.error('[Supabase createGame exception, saving to local fallback]:', err);
+      const db = initLocalDb();
+      db.games.unshift(newGame);
+      saveLocalDb(db);
+      return newGame;
     }
-
-    return {
-      id: data.id,
-      title: data.title,
-      system: data.system,
-      master: data.master,
-      date: data.date,
-      time: data.time,
-      location: data.location,
-      maxPlayers: data.max_players,
-      description: data.description,
-      tags: data.tags,
-      status: data.status,
-      eventType: data.event_type,
-      requiresBooking: data.requires_booking,
-      createdAt: data.created_at,
-    };
   }
 
   const db = initLocalDb();

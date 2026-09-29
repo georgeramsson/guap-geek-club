@@ -17,16 +17,21 @@
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sanitizeSupabaseUrl } from '@/lib/storage';
 
 export async function GET() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+
+  const supabaseUrl = sanitizeSupabaseUrl(rawSupabaseUrl);
 
   const envStatus = {
-    NEXT_PUBLIC_SUPABASE_URL: Boolean(supabaseUrl),
+    NEXT_PUBLIC_SUPABASE_URL: Boolean(rawSupabaseUrl),
     NEXT_PUBLIC_SUPABASE_ANON_KEY: Boolean(anonKey),
     SUPABASE_SERVICE_ROLE_KEY: Boolean(serviceKey),
+    url_auto_fixed: Boolean(rawSupabaseUrl && rawSupabaseUrl.trim() !== supabaseUrl),
+    normalized_url: supabaseUrl || null,
   };
 
   const isConfigured = Boolean(supabaseUrl && (serviceKey || anonKey));
