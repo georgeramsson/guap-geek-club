@@ -17,6 +17,10 @@ import { createClient } from '@supabase/supabase-js';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
+const TMP_DB_FILE = path.join('/tmp', 'guap_db.json');
+
+// In-memory cache fallback for serverless environments (Vercel)
+let memoryDb: LocalDatabase | null = null;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -163,56 +167,52 @@ interface LocalDatabase {
 }
 
 function initLocalDb(): LocalDatabase {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (memoryDb) {
+    return memoryDb;
   }
 
-  if (!fs.existsSync(DB_FILE)) {
-    const initialData: LocalDatabase = {
-      games: INITIAL_GAMES,
-      bookings: INITIAL_BOOKINGS,
-    };
-    fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2), 'utf-8');
-    return initialData;
-  }
-
+  // 1. Проверяем /tmp (если на Vercel уже сохранялись данные)
   try {
-    const raw = fs.readFileSync(DB_FILE, 'utf-8');
-    const parsed: LocalDatabase = JSON.parse(raw);
-    
-    // Авто-миграция: добавляем новые демо-игры, если их еще нет в локальном файле
-    let updated = false;
-    for (const initG of INITIAL_GAMES) {
-      if (!parsed.games.some((g) => g.id === initG.id)) {
-        parsed.games.push(initG);
-        updated = true;
+    if (fs.existsSync(TMP_DB_FILE)) {
+      const raw = fs.readFileSync(TMP_DB_FILE, 'utf-8');
+      const parsed: LocalDatabase = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.games)) {
+        memoryDb = parsed;
+        return parsed;
       }
     }
-    for (const initB of INITIAL_BOOKINGS) {
-      if (!parsed.bookings.some((b) => b.id === initB.id)) {
-        parsed.bookings.push(initB);
-        updated = true;
+  } catch {}
+
+  // 2. Проверяем data/db.json
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      const raw = fs.readFileSync(DB_FILE, 'utf-8');
+      const parsed: LocalDatabase = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.games)) {
+        memoryDb = parsed;
+        return parsed;
       }
     }
+  } catch {}
 
-    if (updated) {
-      fs.writeFileSync(DB_FILE, JSON.stringify(parsed, null, 2), 'utf-8');
-    }
-
-    return parsed;
-  } catch (err) {
-    console.error('Ошибка чтения локальной БД, пересоздаем:', err);
-    const fallback: LocalDatabase = { games: INITIAL_GAMES, bookings: INITIAL_BOOKINGS };
-    fs.writeFileSync(DB_FILE, JSON.stringify(fallback, null, 2), 'utf-8');
-    return fallback;
-  }
+  const fallback: LocalDatabase = { games: INITIAL_GAMES, bookings: INITIAL_BOOKINGS };
+  memoryDb = fallback;
+  return fallback;
 }
 
 function saveLocalDb(data: LocalDatabase): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  memoryDb = data;
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    // В serverless-окружении (Vercel) пишем в каталог /tmp
+    try {
+      fs.writeFileSync(TMP_DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    } catch {}
   }
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
 }
 
 function isGameInPast(dateStr: string, status: string): boolean {
@@ -332,86 +332,105 @@ export async function createBooking(input: CreateBookingInput): Promise<{
   }
 
   if (isSupabaseEnabled && supabase) {
-    const { data: game, error: gErr } = await supabase
-      .from('games')
-      .select('*')
-      .eq('id', input.gameId)
-      .single();
+    try {
+      const { data: game, error: gErr } = await supabase
+        .from('games')
+        .select('*')
+        .eq('id', input.gameId)
+        .maybeSingle();
 
-    if (gErr || !game) {
-      return { success: false, isWaitlist: false, error: 'Игра не найдена' };
+      if (gErr) {
+        console.error('[Supabase getGame error]:', gErr);
+        return { success: false, isWaitlist: false, error: `Ошибка базы Supabase: ${gErr.message}` };
+      }
+
+      if (!game) {
+        return { success: false, isWaitlist: false, error: 'Игра не найдена в базе данных Supabase. Убедитесь, что вы запустили SQL-скрипт в Supabase SQL Editor.' };
+      }
+
+      if (game.status !== 'open') {
+        return { success: false, isWaitlist: false, error: 'Запись на эту игру закрыта' };
+      }
+
+      if (game.requires_booking === false) {
+        return { success: false, isWaitlist: false, error: 'На это мероприятие вход свободный, запись не требуется!' };
+      }
+
+      // Проверяем дубликат
+      const { data: existing, error: existErr } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('game_id', input.gameId)
+        .eq('contact', cleanContact);
+
+      if (existErr) {
+        console.error('[Supabase check existing booking error]:', existErr);
+      }
+
+      if (existing && existing.length > 0) {
+        return { success: false, isWaitlist: false, error: 'Вы уже записаны на эту игру!' };
+      }
+
+      const { count: currentPlayersCount } = await supabase
+        .from('bookings')
+        .select('id', { count: 'exact', head: true })
+        .eq('game_id', input.gameId)
+        .eq('is_waitlist', false);
+
+      const isWaitlist = (currentPlayersCount || 0) >= game.max_players;
+
+      const newBooking = {
+        game_id: input.gameId,
+        name: cleanName,
+        contact: cleanContact,
+        comment: input.comment?.trim() || null,
+        is_waitlist: isWaitlist,
+      };
+
+      const { data: inserted, error: insErr } = await supabase
+        .from('bookings')
+        .insert(newBooking)
+        .select()
+        .single();
+
+      if (insErr) {
+        console.error('[Supabase insertBooking error]:', insErr);
+        return { success: false, isWaitlist: false, error: `Не удалось сохранить запись в Supabase: ${insErr.message}` };
+      }
+
+      const formattedBooking: Booking = {
+        id: inserted.id,
+        gameId: inserted.game_id,
+        name: inserted.name,
+        contact: inserted.contact,
+        comment: inserted.comment,
+        isWaitlist: inserted.is_waitlist,
+        createdAt: inserted.created_at,
+      };
+
+      try {
+        await sendTelegramNotification({
+          gameTitle: game.title,
+          system: game.system,
+          master: game.master,
+          dateTime: `${game.date} в ${game.time}`,
+          location: game.location,
+          playerName: cleanName,
+          playerContact: cleanContact,
+          comment: input.comment,
+          isWaitlist,
+          currentPlayers: (currentPlayersCount || 0) + (isWaitlist ? 0 : 1),
+          maxPlayers: game.max_players,
+        });
+      } catch (tgErr) {
+        console.warn('[Telegram notification error]:', tgErr);
+      }
+
+      return { success: true, booking: formattedBooking, isWaitlist };
+    } catch (sbException: any) {
+      console.error('[Supabase createBooking exception]:', sbException);
+      return { success: false, isWaitlist: false, error: `Ошибка обращения к Supabase: ${sbException?.message || sbException}` };
     }
-
-    if (game.status !== 'open') {
-      return { success: false, isWaitlist: false, error: 'Запись на эту игру закрыта' };
-    }
-
-    if (game.requires_booking === false) {
-      return { success: false, isWaitlist: false, error: 'На это мероприятие вход свободный, запись не требуется!' };
-    }
-
-    // Проверяем дубликат
-    const { data: existing } = await supabase
-      .from('bookings')
-      .select('id')
-      .eq('game_id', input.gameId)
-      .eq('contact', cleanContact);
-
-    if (existing && existing.length > 0) {
-      return { success: false, isWaitlist: false, error: 'Вы уже записаны на эту игру!' };
-    }
-
-    const { count: currentPlayersCount } = await supabase
-      .from('bookings')
-      .select('id', { count: 'exact', head: true })
-      .eq('game_id', input.gameId)
-      .eq('is_waitlist', false);
-
-    const isWaitlist = (currentPlayersCount || 0) >= game.max_players;
-
-    const newBooking = {
-      game_id: input.gameId,
-      name: cleanName,
-      contact: cleanContact,
-      comment: input.comment?.trim() || null,
-      is_waitlist: isWaitlist,
-    };
-
-    const { data: inserted, error: insErr } = await supabase
-      .from('bookings')
-      .insert(newBooking)
-      .select()
-      .single();
-
-    if (insErr) {
-      return { success: false, isWaitlist: false, error: 'Не удалось сохранить запись' };
-    }
-
-    const formattedBooking: Booking = {
-      id: inserted.id,
-      gameId: inserted.game_id,
-      name: inserted.name,
-      contact: inserted.contact,
-      comment: inserted.comment,
-      isWaitlist: inserted.is_waitlist,
-      createdAt: inserted.created_at,
-    };
-
-    await sendTelegramNotification({
-      gameTitle: game.title,
-      system: game.system,
-      master: game.master,
-      dateTime: `${game.date} в ${game.time}`,
-      location: game.location,
-      playerName: cleanName,
-      playerContact: cleanContact,
-      comment: input.comment,
-      isWaitlist,
-      currentPlayers: (currentPlayersCount || 0) + (isWaitlist ? 0 : 1),
-      maxPlayers: game.max_players,
-    });
-
-    return { success: true, booking: formattedBooking, isWaitlist };
   }
 
   // Локальный режим
