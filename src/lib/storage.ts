@@ -59,23 +59,23 @@ const supabase = isSupabaseEnabled
   ? createClient(supabaseUrl!, supabaseKey!)
   : null;
 
-// Начальные демо-данные клуба «СОЗВЕЗДИЕ»
+/// Начальные демо-данные клуба «СОЗВЕЗДИЕ»
 const INITIAL_GAMES: Game[] = [
   {
     id: 'game-1',
-    title: 'Тайна особняка Корбитта',
-    system: 'Зов Ктулху 7e',
+    title: 'Пепел Богенхафена: Тени над ярмаркой',
+    system: 'WFRP 4e',
     master: 'Алексей «GM» Смирнов',
     date: '2026-10-02',
     time: '18:30',
     location: 'Большая Морская 67, ауд. 13-04',
     maxPlayers: 5,
-    description: 'Бостон, 1920-е годы. В старом викторианском доме на окраине происходят необъяснимые вещи: тени шепчут в подвале, а предыдущие арендаторы сходили с ума. Детективам предстоит выяснить, что скрывает наследие покойного мистера Корбитта.',
-    tags: ['Ваншот', 'Мистика', 'Для новичков', '18+'],
+    description: 'Империя Сигмара, мрачные улицы Богенхафена в разгар весенней ярмарки Шаффенфест. Сыщикам и наемникам предстоит раскрыть темный заговор культа Хаоса под мостовыми города. Мрачное и опасное приключение в лучших традициях Warhammer Fantasy 4e.',
+    tags: ['WFRP 4e', 'Ваншот', 'Детектив', 'Гримдарк'],
     status: 'open',
     eventType: 'rpg',
     requiresBooking: true,
-    createdAt: new Date().toISOString(),
+    createdAt: '2026-09-28T17:16:07.167Z',
   },
   {
     id: 'game-2',
@@ -91,23 +91,55 @@ const INITIAL_GAMES: Game[] = [
     status: 'open',
     eventType: 'rpg',
     requiresBooking: true,
-    createdAt: new Date().toISOString(),
+    createdAt: '2026-09-28T17:16:07.167Z',
+  },
+  {
+    id: 'game-3',
+    title: 'Кровавая Ночь в Петербурге: Осколки Маскарада',
+    system: 'Вампиры: Маскарад',
+    master: 'Константин Новиков',
+    date: '2026-10-04',
+    time: '18:00',
+    location: 'Большая Морская 67, ауд. 13-04',
+    maxPlayers: 4,
+    description: 'Северная столица под покровом ночи. Князь созывает котерию неонатов для расследования дерзкого нарушения Первой Традиции на Васильевском острове. Политические интриги Камарильи, борьба со Зверем и личные драмы сородичей.',
+    tags: ['VTM 5e', 'Вампиры', 'Интриги', 'Личные драмы'],
+    status: 'open',
+    eventType: 'rpg',
+    requiresBooking: true,
+    createdAt: '2026-09-28T17:16:07.167Z',
+  },
+  {
+    id: 'game-4',
+    title: 'Руины Чёрной Башни',
+    system: 'Pathfinder 2e',
+    master: 'Дмитрий Ковалев',
+    date: '2026-10-05',
+    time: '17:30',
+    location: 'Гастелло 15, Коворкинг ГУАП',
+    maxPlayers: 5,
+    description: 'Тактическое приключение по системе Pathfinder 2e для героев 2 уровня. Исследуем забытую твердыню древнего мага в Голарионе, полную ловушек, артефактов и чудовищ. Прегены готовы, правила объясним.',
+    tags: ['Pathfinder 2e', 'Тактика', 'Подземелья'],
+    status: 'open',
+    eventType: 'rpg',
+    requiresBooking: true,
+    createdAt: '2026-09-28T17:16:07.167Z',
   },
   {
     id: 'game-open-1',
     title: 'Большая открытая игротека ГУАП: 30+ настольных игр',
-    system: 'Открытая игротека',
+    system: 'Игротека',
     master: 'Дмитрий Ковалев & Волонтеры клуба',
     date: '2026-10-06',
     time: '16:00 - 21:00',
     location: 'Большая Морская 67, Студенческий коворкинг',
     maxPlayers: 0,
-    description: 'Вход абсолютно свободный, без предварительной записи! Приходи один или с компанией в любое время с 16:00 до 21:00. У нас больше 30 настолок: Nemesis, Дюна: Империум, Codenames, Бункер, Каркассон, Эпичные схватки магов и многие другие. Волонтеры клуба встретят, посадят за стол и объяснят правила за 5 минут! Чай и печеньки прилагаются.',
+    description: 'Вход абсолютно свободный, без предварительной записи! Приходи один или с компанией в любое время с 16:00 до 21:00. У нас больше 30 настолок: Nemesis, Дюна: Империум, Codenames, Бункер, Каркассон, Эпичные схватки магов и многие другие. Волонтеры клуба встретят и объяснят правила за 5 минут. Чай и печеньки прилагаются.',
     tags: ['Свободный вход', 'Без записи', '30+ игр', 'Чай и печеньки'],
     status: 'open',
     eventType: 'open_boardgame',
     requiresBooking: false,
-    createdAt: new Date().toISOString(),
+    createdAt: '2026-09-28T17:24:24.879Z',
   },
   {
     id: 'game-past-1',
@@ -123,12 +155,12 @@ const INITIAL_GAMES: Game[] = [
     status: 'archived',
     eventType: 'rpg',
     requiresBooking: true,
-    createdAt: new Date(Date.now() - 3600000 * 24 * 10).toISOString(),
+    createdAt: '2026-09-18T17:24:24.879Z',
   },
   {
     id: 'game-past-2',
     title: 'Осенний чемпионат ГУАП по «Каркассону»',
-    system: 'Турнир по настолкам',
+    system: 'Игротека',
     master: 'Совет Клуба',
     date: '2026-09-15',
     time: '17:00',
@@ -139,7 +171,7 @@ const INITIAL_GAMES: Game[] = [
     status: 'archived',
     eventType: 'open_boardgame',
     requiresBooking: false,
-    createdAt: new Date(Date.now() - 3600000 * 24 * 15).toISOString(),
+    createdAt: '2026-09-13T17:24:24.879Z',
   },
 ];
 
@@ -149,26 +181,27 @@ const INITIAL_BOOKINGS: Booking[] = [
     gameId: 'game-1',
     name: 'Артем Васильев',
     contact: 'https://vk.com/artem_v',
-    comment: 'Играл один раз в D&D, хочу попробовать Ктулху',
+    comment: 'Играл в D&D, хочу попробовать мрачный Warhammer',
     isWaitlist: false,
-    createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
+    createdAt: '2026-09-28T13:16:07.167Z',
   },
   {
     id: 'b-2',
     gameId: 'game-1',
     name: 'Екатерина Морозова',
     contact: 'https://vk.com/katya_m',
-    comment: 'Новичок, нужен преген сыщика',
+    comment: 'Новичок, нужен преген сыщика/охотника на ведьм',
     isWaitlist: false,
-    createdAt: new Date(Date.now() - 3600000 * 3).toISOString(),
+    createdAt: '2026-09-28T14:16:07.167Z',
   },
   {
     id: 'b-3',
-    gameId: 'game-1',
+    gameId: 'game-3',
     name: 'Илья Соколов',
     contact: '@ilya_geek',
+    comment: 'Клан Тореадор, опыт есть',
     isWaitlist: false,
-    createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+    createdAt: '2026-09-28T15:16:07.167Z',
   },
   {
     id: 'b-4',
@@ -177,7 +210,7 @@ const INITIAL_BOOKINGS: Booking[] = [
     contact: 'https://vk.com/sofia_leb',
     comment: 'Буду играть бардом',
     isWaitlist: false,
-    createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
+    createdAt: '2026-09-28T12:16:07.167Z',
   },
   {
     id: 'b-past-1',
@@ -287,6 +320,57 @@ export async function getGamesWithBookings(): Promise<GameWithBookings[]> {
         return getLocalGamesWithBookings();
       }
 
+      let gamesData = games || [];
+
+      // Если в базе Supabase таблица games пока пуста — автоматически наполняем её актуальными играми
+      if (gamesData.length === 0) {
+        try {
+          console.log('[Supabase]: Таблица games пуста, выполняем автонаполнение актуальными играми...');
+          const seedGamesPayload = INITIAL_GAMES.map((g) => ({
+            id: g.id,
+            title: g.title,
+            system: g.system,
+            master: g.master,
+            date: g.date,
+            time: g.time,
+            location: g.location,
+            max_players: g.maxPlayers,
+            description: g.description,
+            tags: g.tags || [],
+            status: g.status,
+            event_type: g.eventType || 'rpg',
+            requires_booking: g.requiresBooking ?? (g.eventType !== 'open_boardgame'),
+          }));
+
+          const { error: seedErr } = await supabase
+            .from('games')
+            .upsert(seedGamesPayload);
+
+          if (!seedErr) {
+            const seedBookingsPayload = INITIAL_BOOKINGS.map((b) => ({
+              id: b.id,
+              game_id: b.gameId,
+              name: b.name,
+              contact: b.contact,
+              comment: b.comment || null,
+              is_waitlist: b.isWaitlist,
+            }));
+            await supabase.from('bookings').upsert(seedBookingsPayload);
+
+            const { data: refetched } = await supabase
+              .from('games')
+              .select('*')
+              .order('date', { ascending: true });
+
+            if (refetched && refetched.length > 0) {
+              gamesData = refetched;
+            }
+          }
+        } catch (seedEx) {
+          console.error('[Supabase seed exception]:', seedEx);
+        }
+      }
+
       const { data: bookings, error: bookErr } = await supabase
         .from('bookings')
         .select('*')
@@ -306,7 +390,7 @@ export async function getGamesWithBookings(): Promise<GameWithBookings[]> {
         createdAt: b.created_at,
       }));
 
-      return (games || []).map((g) => {
+      return gamesData.map((g) => {
         const gameBookings = allBookings.filter((b) => b.gameId === g.id);
         const players = gameBookings.filter((b) => !b.isWaitlist);
         const waitlist = gameBookings.filter((b) => b.isWaitlist);
