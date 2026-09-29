@@ -63,42 +63,10 @@ export async function GET() {
       }, { status: 500 });
     }
 
-    let testInsertResult: any = null;
-    if (!data || data.length === 0) {
-      const { data: insData, error: insErr } = await client
-        .from('games')
-        .insert({
-          id: 'test-seed-check',
-          title: 'Тестовая игра',
-          system: 'D&D 5e',
-          master: 'Мастер',
-          date: '2026-10-10',
-          time: '18:00',
-          location: 'ГУАП',
-          max_players: 5,
-          description: 'Проверка записи',
-          tags: ['Тест'],
-          status: 'open',
-          event_type: 'rpg',
-          requires_booking: true,
-        })
-        .select()
-        .single();
-
-      if (insErr) {
-        testInsertResult = { success: false, error: insErr.message, code: insErr.code, hint: insErr.hint, details: insErr.details };
-      } else {
-        testInsertResult = { success: true, createdId: insData?.id };
-        // Удаляем тестовую запись
-        await client.from('games').delete().eq('id', 'test-seed-check');
-      }
-    }
-
     return NextResponse.json({
       status: 'supabase_connected',
       message: 'Облачная база Supabase успешно подключена и отвечает!',
       gamesCount: data?.length || 0,
-      testInsert: testInsertResult,
       env: envStatus,
     });
   } catch (err: any) {
