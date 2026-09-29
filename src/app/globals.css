@@ -1,0 +1,122 @@
+/**
+ * @file src/app/globals.css
+ * @description Глобальные стили приложения для клуба настольных и ролевых игр «СОЗВЕЗДИЕ» (ГУАП Geek Club).
+ * 
+ * Назначение:
+ * Реализует дизайн-систему на основе официального брендбука клуба с соблюдением стандартов Design Engineering:
+ *  - Цветовая палитра: глубокий космос (#070422 / #130a38), звездное золото (#FFFC1C) и неон-маджента (#BB10F3);
+ *  - Фирменный пиксельный шрифт PIXY для заголовков;
+ *  - Табличные цифры (tabular-nums) для стабильного отображения счетчиков слотов, дат и таймеров;
+ *  - Доступность: явный фокус-ринг (:focus-visible) для навигации с клавиатуры;
+ *  - Многослойные тени глубины вместо плоских кислотных подсветок.
+ * 
+ * Принцип работы:
+ * Подключается в корневом layout (src/app/layout.tsx) и формирует визуальные стили всего приложения.
+ */
+
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'PIXY';
+  src: url('/fonts/PIXY.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --space-dark: #070422;
+  --space-purple: #130a38;
+  --brand-purple: #6B0795;
+  --brand-navy: #0B0741;
+  --brand-yellow: #FFFC1C;
+  --brand-magenta: #BB10F3;
+  --brand-cyan: #7be7ff;
+}
+
+body {
+  background-color: var(--space-dark);
+  color: #f3f0ff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Доступность: Фокус-ринг для навигации с клавиатуры (WCAG) */
+:focus-visible {
+  outline: 2px solid #FFFC1C;
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* Табличные цифры для предотвращения дёргания верстки в таймерах и счетчиках */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Фирменный пиксельный шрифт */
+.font-pixy {
+  font-family: 'PIXY', monospace, sans-serif;
+  letter-spacing: 0.04em;
+}
+
+/* Градиенты из брендбука */
+.bg-gradient-brand {
+  background: linear-gradient(135deg, #6B0795 0%, #0B0741 100%);
+}
+
+.bg-gradient-accent {
+  background: linear-gradient(135deg, #FFFC1C 0%, #BB10F3 100%);
+}
+
+.text-gradient-accent {
+  background: linear-gradient(135deg, #FFFC1C 0%, #BB10F3 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Космический фон со звездами */
+.stars-bg {
+  background-color: #070422;
+  background-image: 
+    radial-gradient(1px 1px at 20px 30px, #ffffff, rgba(0,0,0,0)),
+    radial-gradient(1.5px 1.5px at 100px 150px, #FFFC1C, rgba(0,0,0,0)),
+    radial-gradient(1px 1px at 240px 70px, #ffffff, rgba(0,0,0,0)),
+    radial-gradient(2px 2px at 320px 210px, #7be7ff, rgba(0,0,0,0)),
+    radial-gradient(1.5px 1.5px at 450px 120px, #BB10F3, rgba(0,0,0,0)),
+    radial-gradient(1px 1px at 580px 290px, #ffffff, rgba(0,0,0,0)),
+    radial-gradient(1.5px 1.5px at 700px 80px, #FFFC1C, rgba(0,0,0,0)),
+    radial-gradient(1px 1px at 850px 190px, #ffffff, rgba(0,0,0,0)),
+    radial-gradient(2px 2px at 980px 320px, #7be7ff, rgba(0,0,0,0)),
+    radial-gradient(1.5px 1.5px at 1100px 140px, #ffffff, rgba(0,0,0,0)),
+    radial-gradient(2px 2px at 1250px 230px, #BB10F3, rgba(0,0,0,0));
+  background-repeat: repeat;
+  background-size: 600px 400px;
+}
+
+/* Элегантные стеклянные карточки с многоуровневой тенью глубины (better-ui surfaces) */
+.glass-panel {
+  background: rgba(19, 10, 56, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(187, 16, 243, 0.2);
+  box-shadow: 
+    0 4px 20px -2px rgba(0, 0, 0, 0.5),
+    0 1px 2px 0 rgba(0, 0, 0, 0.3),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.06);
+  transition: 
+    border-color 0.2s cubic-bezier(0.2, 0, 0, 1),
+    box-shadow 0.2s cubic-bezier(0.2, 0, 0, 1),
+    transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.glass-panel:hover {
+  border-color: rgba(255, 252, 28, 0.35);
+  box-shadow: 
+    0 10px 30px -4px rgba(0, 0, 0, 0.6),
+    0 0 15px -3px rgba(187, 16, 243, 0.25),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.1);
+}
