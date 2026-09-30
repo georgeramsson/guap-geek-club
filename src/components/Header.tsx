@@ -72,11 +72,11 @@ export function Header() {
 
             {/* Telegram канал */}
             <a
-              href="https://t.me"
+              href="https://t.me/guap_geek_club"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-purple-200 bg-purple-950/60 hover:bg-purple-900/60 border border-purple-700/40 transition-all hover:text-white"
-              title="Telegram канал клуба"
+              title="Telegram-канал клуба (@guap_geek_club)"
               aria-label="Telegram канал"
             >
               <Send className="w-3.5 h-3.5 text-[#2AABEE]" />

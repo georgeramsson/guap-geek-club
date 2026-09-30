@@ -394,7 +394,7 @@ export default function HomePage() {
           <p className="text-[11px]">
             Клуб настольных и ролевых игр Санкт-Петербургского государственного университета аэрокосмического приборостроения.
           </p>
-          <div className="pt-1.5 flex justify-center gap-3 text-[11px] font-medium">
+          <div className="pt-1.5 flex flex-wrap justify-center gap-x-3 gap-y-1 text-[11px] font-medium">
             <a 
               href="https://vk.ru/guap_geek_club" 
               target="_blank" 
@@ -402,6 +402,15 @@ export default function HomePage() {
               className="text-purple-300 hover:text-yellow-300 transition-colors"
             >
               ВКонтакте: vk.ru/guap_geek_club
+            </a>
+            <span>•</span>
+            <a 
+              href="https://t.me/guap_geek_club" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-purple-300 hover:text-yellow-300 transition-colors"
+            >
+              Telegram: t.me/guap_geek_club
             </a>
             <span>•</span>
             <a 

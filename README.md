@@ -4,6 +4,8 @@
 
 * **Рабочий сайт:** [https://guap-geek-club.vercel.app](https://guap-geek-club.vercel.app)
 * **Панель мастера:** [https://guap-geek-club.vercel.app/admin](https://guap-geek-club.vercel.app/admin) (Пин-код: `geek2026`)
+* **Telegram-канал:** [https://t.me/guap_geek_club](https://t.me/guap_geek_club)
+* **Группа ВКонтакте:** [https://vk.ru/guap_geek_club](https://vk.ru/guap_geek_club)
 * **Онлайн-диагностика статуса:** [https://guap-geek-club.vercel.app/api/status](https://guap-geek-club.vercel.app/api/status)
 * **Репозиторий GitHub:** [https://github.com/georgeramsson/guap-geek-club](https://github.com/georgeramsson/guap-geek-club)
 
@@ -124,7 +126,7 @@ TELEGRAM_CHAT_ID=-1001234567890
 4. Нажмите **«Создать анонс»**. Игра мгновенно появится на главной странице.
 
 ### Генератор постов для соцсетей:
-На карточке каждой игры в Панели мастера есть кнопка **«Скопировать анонс»**. Она формирует красивый готовый текст с эмодзи и прямой ссылкой для публикации в группе [ВКонтакте](https://vk.ru/guap_geek_club) или в Telegram-канале.
+На карточке каждой игры в Панели мастера есть кнопка **«Скопировать анонс»**. Она формирует красивый готовый текст с эмодзи и прямой ссылкой для публикации в группе [ВКонтакте](https://vk.ru/guap_geek_club) или в [Telegram-канале](https://t.me/guap_geek_club).
 
 ---
 
