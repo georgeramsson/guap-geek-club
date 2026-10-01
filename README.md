@@ -2,27 +2,28 @@
 
 Официальный веб-сервис для анонсов и регистрации на настольные и ролевые игры клуба **«СОЗВЕЗДИЕ» (ГУАП Geek Club)**.
 
-* **Рабочий сайт:** [https://guap-geek-club.vercel.app](https://guap-geek-club.vercel.app)
-* **Панель мастера:** [https://guap-geek-club.vercel.app/admin](https://guap-geek-club.vercel.app/admin) (Пин-код: `geek2026`)
+* **Рабочий сайт:** [https://guap-geek-club.onrender.com](https://guap-geek-club.onrender.com)
+* **Панель мастера:** [https://guap-geek-club.onrender.com/admin](https://guap-geek-club.onrender.com/admin) (Пин-код: `geek2026`)
 * **Telegram-канал:** [https://t.me/guap_geek_club](https://t.me/guap_geek_club)
 * **Группа ВКонтакте:** [https://vk.ru/guap_geek_club](https://vk.ru/guap_geek_club)
-* **Онлайн-диагностика статуса:** [https://guap-geek-club.vercel.app/api/status](https://guap-geek-club.vercel.app/api/status)
+* **Онлайн-диагностика статуса:** [https://guap-geek-club.onrender.com/api/status](https://guap-geek-club.onrender.com/api/status)
 * **Репозиторий GitHub:** [https://github.com/georgeramsson/guap-geek-club](https://github.com/georgeramsson/guap-geek-club)
 
 ---
 
 ## 🏗 Архитектура: как всё устроено и работает вместе
 
-Проект построен на современной бессерверной (serverless) архитектуре без необходимости арендовать и администрировать выделенные VPS-серверы:
+Сервис развернут на современной облачной PaaS-инфраструктуре с поддержкой автономного Node.js runtime, баз данных и внешних интеграций:
 
 ```mermaid
 flowchart TD
-    Player["👤 Студент / Игрок"] -->|Заходит на сайт| WebApp["⚡ Vercel (Next.js 16 Web App)<br/>guap-geek-club.vercel.app"]
+    Player["👤 Студент / Игрок"] -->|Заходит на сайт| WebApp["⚡ Render (Next.js 16 Web Service)<br/>guap-geek-club.onrender.com"]
     Master["👑 Мастер / Организатор"] -->|Создает анонс в /admin| WebApp
+    CronJob["⏰ Внешний пингер (cron-job.org / UptimeRobot)<br/>Пинг /api/status каждые 10 мин"] -->|Защита от засыпания 24/7| WebApp
     
-    subgraph VercelApp["Хостинг Vercel"]
+    subgraph RenderApp["Хостинг Render (Web Service)"]
         UI["React Frontend UI<br/>(Tailwind CSS + фирменный стиль ГУАП)"]
-        API["Next.js Serverless API<br/>(/api/games, /api/bookings, /api/status)"]
+        API["Next.js Node.js API Routes<br/>(/api/games, /api/bookings, /api/status)"]
         RateLimit["Защита от спама & ботов<br/>(Rate Limiter + Device Lock)"]
     end
     
@@ -34,22 +35,39 @@ flowchart TD
     API -->|Уведомление о новой записи| Telegram["📱 Telegram Bot<br/>(Чат мастеров клуба)"]
     
     Developer["💻 Разработчик"] -->|git push origin main| GitHub["🐙 GitHub Репозиторий<br/>georgeramsson/guap-geek-club"]
-    GitHub -->|Автоматический вебхук| WebApp
+    GitHub -->|Автоматический вебхук сборки| WebApp
 ```
 
-### 1. GitHub (Хранилище кода и версионирование)
+### 1. GitHub (Хранилище кода и CI/CD)
 * Все файлы исходного кода хранятся в репозитории `https://github.com/georgeramsson/guap-geek-club`.
-* Основная ветка — `main`. Любое изменение кода, отправленное в эту ветку командой `git push origin main`, автоматически запускает сборку новой версии на Vercel.
+* Основная ветка — `main`. При каждом пуше изменений (`git push origin main`) Render автоматически запускает новую сборку и обновляет сайт без простоя.
 
-### 2. Vercel (Бесплатный облачный хостинг и выполнение кода)
-* **Vercel** забирает код из GitHub, компилирует его с помощью Next.js и раздаёт пользователям через глобальную сеть CDN с бесплатным HTTPS-сертификатом.
-* Доступен из РФ быстро и без VPN.
-* В Vercel работают серверные функции (Serverless Functions), которые обрабатывают создание игр, бронирование, валидацию и защиту от накруток.
+### 2. Render (Облачный хостинг веб-приложения)
+* **Render.com (Web Service)** собирает и выполняет приложение на базе **Node.js (v20+)** и фреймворка **Next.js 16**.
+* **Доступность в РФ:** В отличие от доменной зоны `*.vercel.app` (которая заблокирована РКН), домены `*.onrender.com` **полностью доступны в России без VPN**.
+* **Серверная логика:** На Render полноценно работают серверные роуты Next.js: обработка бронирований, валидация данных, rate limiting, отправка уведомлений мастерам в Telegram и автопереключение на локальную базу при необходимости.
+* **Безопасность:** Бесплатный автоматический SSL-сертификат (HTTPS), защита от DDoS и изоляция процессов.
 
-### 3. Supabase (Облачная реляционная база данных PostgreSQL)
-* В **Supabase** хранятся все постоянные данные проекта. Даже если сайт на Vercel перезапускается или обновляется, все созданные партии и записи игроков остаются в целости в базе данных.
-* Проект общается с базой через официальную библиотеку `@supabase/supabase-js`.
-* Сервер использует защищенный сервисный ключ `SUPABASE_SERVICE_ROLE_KEY`, поэтому данные защищены от прямого несанкционированного доступа снаружи.
+### 3. Supabase (Облачная база данных PostgreSQL)
+* В **Supabase** хранятся постоянные данные: список игр, ведущие, количество мест, участники и резерв.
+* Даже при перезапуске сервера на Render, деплое новых версий или очистке кэша все брони и игры остаются в сохранности в базе данных.
+* Подключение выполняется через защищенные ключи API (`SUPABASE_SERVICE_ROLE_KEY` или `NEXT_PUBLIC_SUPABASE_ANON_KEY`).
+
+---
+
+## ⏰ Защита от засыпания сервиса («Вечный онлайн» 24/7 на Render)
+
+На бесплатном тарифе Render Web Service есть особенность: если к сайту никто не обращался в течение 15 минут, сервис временно **засыпает (spin down)** для экономии ресурсов. Первый пользователь после сна ожидает открытия сайта ~30–45 секунд (холодный старт контейнера).
+
+### Как настроить бесплатный пинг за 2 минуты:
+1. Зарегистрируйтесь на бесплатном сервисе мониторинга:
+   * [cron-job.org](https://cron-job.org) (рекомендуется — бесплатный и без лимитов);
+   * либо [uptimerobot.com](https://uptimerobot.com).
+2. Создайте задачу мониторинга (Cronjob / HTTP Monitor):
+   * **URL:** `https://guap-geek-club.onrender.com/api/status`
+   * **Метод:** `GET`
+   * **Интервал:** раз в **10 минут** (или каждые 5–10 минут).
+3. Этот легковесный запрос проверяет подключение базы данных, возвращает `200 OK` и поддерживает контейнер Render в активном состоянии. Сайт открывается мгновенно 24 часа в сутки.
 
 ---
 
@@ -97,15 +115,18 @@ flowchart TD
 
 ## 🔑 Переменные окружения (Environment Variables)
 
-Все секретные ключи настраиваются в **Vercel** (`Settings -> Environment Variables`) и локально в файле `.env.local`:
+Все секретные ключи настраиваются в панели **Render** (`Dashboard -> guap-geek-club -> Environment -> Add Environment Variable`) и локально в файле `.env.local`:
 
 ```env
-# 1. Подключение к облачной базе Supabase
+# 1. Версия Node.js для сборки Next.js 16 на Render (Обязательно!)
+NODE_VERSION=20.18.0
+
+# 2. Подключение к облачной базе Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://ваш-проект.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=ваш_anon_public_key
 SUPABASE_SERVICE_ROLE_KEY=ваш_service_role_secret_key
 
-# 2. Уведомления в Telegram-чат мастеров клуба (Опционально)
+# 3. Уведомления в Telegram-чат мастеров клуба (Опционально)
 TELEGRAM_BOT_TOKEN=123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ
 TELEGRAM_CHAT_ID=-1001234567890
 ```
@@ -117,7 +138,7 @@ TELEGRAM_CHAT_ID=-1001234567890
 ## 👑 Руководство для мастеров клуба
 
 ### Как опубликовать новую игру:
-1. Перейдите по адресу: [https://guap-geek-club.vercel.app/admin](https://guap-geek-club.vercel.app/admin).
+1. Перейдите по адресу: [https://guap-geek-club.onrender.com/admin](https://guap-geek-club.onrender.com/admin).
 2. Введите мастер-код (по умолчанию: `geek2026`).
 3. Заполните форму анонса:
    * Выберите систему (`D&D 5e`, `WFRP 4e`, `Вампиры: Маскарад`, `Pathfinder 2e`, `Игротека`).
@@ -140,14 +161,22 @@ TELEGRAM_CHAT_ID=-1001234567890
 3. Нажмите кнопку **Transfer ownership**.
 4. Введите GitHub-логин нового владельца и подтвердите передачу паролем. Репозиторий перенесётся со всей историей коммитов.
 
-### 2. Передача проекта на Vercel
-**Вариант А (Добавить администратором):**
-1. В Vercel откройте проект `guap-geek-club` → вкладка **Settings** → **Project Members**.
-2. Пригласите email нового администратора с ролью **Admin** или **Owner**.
+### 2. Передача сервиса на Render
+**Вариант А (Добавить администратора в команду):**
+1. В Render перейдите в **Dashboard** → выберите ваш воркспейс / аккаунт.
+2. Откройте **Settings** → **Members**.
+3. Нажмите **Invite Member**, введите email нового координатора и выберите роль **Admin**.
 
-**Вариант Б (Полная передача проекта):**
-1. В Vercel откройте проект → **Settings** → **General**.
-2. В самом низу страницы найдите **Transfer Project** и передайте его на аккаунт нового владельца.
+**Вариант Б (Развернуть на аккаунте нового владельца за 3 минуты):**
+1. Новый владелец входит на [render.com](https://render.com) через свой GitHub.
+2. Нажимает **New +** → **Web Service** → подключает переданный репозиторий `guap-geek-club`.
+3. Указывает параметры:
+   * **Runtime:** `Node`
+   * **Build Command:** `npm run build`
+   * **Start Command:** `npm run start`
+   * **Instance Type:** `Free`
+4. В разделе **Environment** добавляет переменные окружения (`NODE_VERSION`, ключи Supabase и Telegram).
+5. Нажимает **Deploy Web Service**.
 
 ### 3. Передача базы данных Supabase
 1. Зайдите в проект на [supabase.com](https://supabase.com).
@@ -164,7 +193,7 @@ TELEGRAM_CHAT_ID=-1001234567890
 
 ```bash
 # 1. Перейти в каталог проекта
-cd "guap-geek-club"
+cd "pet projects/guap-geek-club"
 
 # 2. Установить зависимости
 npm install
@@ -187,9 +216,9 @@ npm run build
 ## 🩺 Диагностика и проверка работоспособности
 
 В проекте есть встроенный эндпоинт мониторинга состояния:
-👉 **[https://guap-geek-club.vercel.app/api/status](https://guap-geek-club.vercel.app/api/status)**
+👉 **[https://guap-geek-club.onrender.com/api/status](https://guap-geek-club.onrender.com/api/status)**
 
-При нормальной работе он возвращает JSON:
+При нормальной работе он возвращает JSON со статусом:
 ```json
 {
   "status": "supabase_connected",
@@ -199,9 +228,9 @@ npm run build
     "NEXT_PUBLIC_SUPABASE_URL": true,
     "NEXT_PUBLIC_SUPABASE_ANON_KEY": true,
     "SUPABASE_SERVICE_ROLE_KEY": true,
-    "url_auto_fixed": true,
-    "normalized_url": "https://cadsrvvtvkjufjyranfz.supabase.co"
+    "url_auto_fixed": false,
+    "normalized_url": "https://your-project.supabase.co"
   }
 }
 ```
-Если база недоступна или ключи не настроены, сервер не упадёт, а вернёт понятное описание проблемы со статусом ошибки.
+Если база временно недоступна или переменные не настроены, сервер вернёт понятное описание проблемы со статусом ошибки или сообщением о работе в локальном файловом режиме (`local_mode`).

@@ -22,7 +22,7 @@ export function CopyAnnouncementModal({ game, isOpen, onClose }: CopyAnnouncemen
 
   if (!isOpen || !game) return null;
 
-  const siteOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://guap-geek-club.vercel.app';
+  const siteOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://guap-geek-club.onrender.com';
   const directGameUrl = `${siteOrigin}/games/${game.id}`;
 
   const isRpg = game.requiresBooking;

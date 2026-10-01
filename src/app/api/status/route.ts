@@ -1,6 +1,6 @@
 /**
  * @file src/app/api/status/route.ts
- * @description Диагностический маршрут для проверки статуса базы данных и переменных окружения на Vercel.
+ * @description Диагностический маршрут для проверки статуса базы данных и переменных окружения на Render / сервере.
  * 
  * Назначение:
  * Позволяет администратору или разработчику мгновенно проверить, какие ключи Supabase видит сервер,
@@ -38,7 +38,7 @@ export async function GET() {
   if (!isConfigured) {
     return NextResponse.json({
       status: 'local_mode',
-      message: 'Переменные Supabase не обнаружены на Vercel. Сайт работает в автономном режиме на файловой базе data/db.json. Если вы добавляли переменные в Settings -> Environment Variables, выполните Redeploy в Vercel.',
+      message: 'Переменные Supabase не обнаружены на Render. Сайт работает в автономном режиме на файловой базе data/db.json. Если вы добавляли переменные в Environment, выполните Manual Deploy -> Clear build cache & deploy на Render.',
       env: envStatus,
     });
   }

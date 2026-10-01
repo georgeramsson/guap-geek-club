@@ -243,7 +243,7 @@ export function BookingModal({ game, isOpen, onClose, onSuccess }: BookingModalP
   const handleCopyGameLink = () => {
     const url = typeof window !== 'undefined' 
       ? `${window.location.origin}/games/${game.id}` 
-      : `https://guap-geek-club.vercel.app/games/${game.id}`;
+      : `https://guap-geek-club.onrender.com/games/${game.id}`;
     navigator.clipboard.writeText(url);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
