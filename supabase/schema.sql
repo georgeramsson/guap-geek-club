@@ -26,10 +26,20 @@ CREATE TABLE IF NOT EXISTS public.games (
   description TEXT NOT NULL,
   tags TEXT[] DEFAULT '{}',
   status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed', 'archived')),
-  event_type TEXT NOT NULL DEFAULT 'rpg' CHECK (event_type IN ('rpg', 'open_boardgame')),
+  event_type TEXT NOT NULL DEFAULT 'rpg' CHECK (event_type IN ('rpg', 'open_boardgame', 'campaign', 'other')),
+  custom_event_type TEXT,
+  dates TEXT[] DEFAULT '{}',
   requires_booking BOOLEAN NOT NULL DEFAULT true,
+  publish_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Миграция для ранее созданных таблиц
+ALTER TABLE public.games DROP CONSTRAINT IF EXISTS games_event_type_check;
+ALTER TABLE public.games ADD CONSTRAINT games_event_type_check CHECK (event_type IN ('rpg', 'open_boardgame', 'campaign', 'other'));
+ALTER TABLE public.games ADD COLUMN IF NOT EXISTS custom_event_type TEXT;
+ALTER TABLE public.games ADD COLUMN IF NOT EXISTS dates TEXT[] DEFAULT '{}';
+ALTER TABLE public.games ADD COLUMN IF NOT EXISTS publish_at TIMESTAMPTZ;
 
 -- 2. Таблица записей игроков (bookings)
 CREATE TABLE IF NOT EXISTS public.bookings (

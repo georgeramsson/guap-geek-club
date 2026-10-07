@@ -1,8 +1,13 @@
 /**
  * @file src/app/games/[id]/page.tsx
  * @description Страница конкретной игры/игротеки по прямой ссылке.
+ * 
+ * Назначение:
  * Идеально подходит для публикации в постах ВКонтакте и Telegram-канала.
  * Игрок переходит прямо на карточку нужной сессии и сразу видит свободные места.
+ * Ведущий (ДМ) может открыть страницу и напрямую связаться с игроками своего стола через кликабельные контакты.
+ * 
+ * Поддерживает форматы: НРИ (ваншоты), Кампании (серии сессий), Открытые игротеки, Прочее.
  */
 
 'use client';
@@ -12,6 +17,7 @@ import Link from 'next/link';
 import { Header } from '@/components/Header';
 import { BookingModal } from '@/components/BookingModal';
 import { GameWithBookings } from '@/lib/types';
+import { formatRuDate } from '@/lib/dateUtils';
 import { 
   Calendar, 
   Clock, 
@@ -24,7 +30,8 @@ import {
   Check, 
   AlertCircle,
   Dices,
-  PartyPopper
+  PartyPopper,
+  ExternalLink
 } from 'lucide-react';
 
 interface GamePageProps {
@@ -69,6 +76,15 @@ export default function GameDetailPage({ params }: GamePageProps) {
     }
   };
 
+  const getContactUrl = (contact: string) => {
+    const trimmed = contact.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+    if (trimmed.startsWith('@')) return `https://t.me/${trimmed.slice(1)}`;
+    if (trimmed.startsWith('t.me/')) return `https://${trimmed}`;
+    if (trimmed.startsWith('vk.com/')) return `https://${trimmed}`;
+    return `https://t.me/${trimmed}`;
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col stars-bg">
@@ -111,6 +127,9 @@ export default function GameDetailPage({ params }: GamePageProps) {
     ? Math.min(100, Math.round((mainPlayers.length / game.maxPlayers) * 100))
     : 0;
 
+  const isCampaign = game.eventType === 'campaign';
+  const isOther = game.eventType === 'other';
+
   return (
     <div className="min-h-screen flex flex-col stars-bg">
       <Header />
@@ -129,7 +148,7 @@ export default function GameDetailPage({ params }: GamePageProps) {
 
           <button
             onClick={handleCopyLink}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-950/60 hover:bg-purple-900/60 border border-purple-700/50 text-yellow-300 transition-all"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-950/60 hover:bg-purple-900/60 border border-purple-700/50 text-yellow-300 transition-all cursor-pointer"
             title="Скопировать прямую ссылку на эту игру"
           >
             {copiedLink ? (
@@ -153,6 +172,18 @@ export default function GameDetailPage({ params }: GamePageProps) {
             <span className="px-3 py-1 rounded-xl text-xs font-bold bg-purple-900/80 text-yellow-300 border border-yellow-300/40">
               {game.system}
             </span>
+
+            {isCampaign && (
+              <span className="px-3 py-1 rounded-xl text-xs font-bold bg-indigo-950/80 text-indigo-300 border border-indigo-500/40">
+                🗺️ Кампания ({game.dates?.length || 1} сессий)
+              </span>
+            )}
+
+            {isOther && (
+              <span className="px-3 py-1 rounded-xl text-xs font-bold bg-violet-950/80 text-violet-300 border border-violet-500/40">
+                ✨ {game.customEventType || 'Спецформат'}
+              </span>
+            )}
 
             {game.requiresBooking ? (
               game.status === 'closed' ? (
@@ -193,8 +224,16 @@ export default function GameDetailPage({ params }: GamePageProps) {
             <div className="flex items-center gap-2.5">
               <Calendar className="w-4 h-4 text-[#7be7ff] flex-shrink-0" />
               <div>
-                <div className="text-purple-400 text-[10px]">Дата и время:</div>
-                <strong className="text-white text-sm">{game.date} в {game.time}</strong>
+                <div className="text-purple-400 text-[10px]">
+                  {isCampaign && game.dates && game.dates.length > 1 ? 'Расписание сессий:' : 'Дата и время:'}
+                </div>
+                {isCampaign && game.dates && game.dates.length > 1 ? (
+                  <div className="text-white text-xs font-medium">
+                    {game.dates.map(d => formatRuDate(d)).join(', ')} в {game.time}
+                  </div>
+                ) : (
+                  <strong className="text-white text-sm">{formatRuDate(game.date)} в {game.time}</strong>
+                )}
               </div>
             </div>
 
@@ -254,29 +293,45 @@ export default function GameDetailPage({ params }: GamePageProps) {
                 />
               </div>
 
-              {/* Список игроков */}
+              {/* Список игроков с кликабельными ссылками */}
               <div>
-                <div className="text-xs text-purple-300 mb-2 font-semibold">
-                  Записавшиеся игроки:
+                <div className="text-xs text-purple-300 mb-2 font-semibold flex items-center justify-between">
+                  <span>Записавшиеся игроки (кликните, чтобы связаться):</span>
+                  <span className="text-[11px] text-purple-400 font-normal">
+                    {mainPlayers.length} в основе, {waitlistPlayers.length} в резерве
+                  </span>
                 </div>
                 {mainPlayers.length === 0 ? (
                   <p className="text-xs text-purple-400 italic">Пока никто не записался. Будьте первым!</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {mainPlayers.map((player) => (
-                      <span
+                      <a
                         key={player.id}
-                        className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-purple-900/60 border border-purple-700/40 text-purple-200"
+                        href={getContactUrl(player.contact)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-purple-900/60 hover:bg-purple-850 border border-purple-700/40 hover:border-yellow-300/50 text-purple-200 hover:text-white transition-all group/player"
+                        title={`Написать игроку: ${player.contact}`}
                       >
-                        <span className="w-2 h-2 rounded-full bg-yellow-300" />
+                        <span className="w-2 h-2 rounded-full bg-yellow-300 group-hover/player:scale-125 transition-transform" />
                         <span>{player.name}</span>
-                      </span>
+                        <ExternalLink className="w-3 h-3 text-purple-400 group-hover/player:text-yellow-300 opacity-60 group-hover/player:opacity-100" />
+                      </a>
                     ))}
-                    {waitlistPlayers.length > 0 && (
-                      <span className="inline-flex items-center text-xs px-2.5 py-1 rounded-full bg-amber-950/80 border border-amber-600/40 text-amber-300 font-semibold">
-                        +{waitlistPlayers.length} в резерве
-                      </span>
-                    )}
+                    {waitlistPlayers.map((player) => (
+                      <a
+                        key={player.id}
+                        href={getContactUrl(player.contact)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-amber-950/80 hover:bg-amber-900 border border-amber-600/40 hover:border-amber-400 text-amber-300 font-semibold transition-all group/wait"
+                        title={`Резерв: ${player.contact}`}
+                      >
+                        <span>Резерв: {player.name}</span>
+                        <ExternalLink className="w-3 h-3 text-amber-400 opacity-70 group-hover/wait:opacity-100" />
+                      </a>
+                    ))}
                   </div>
                 )}
               </div>
@@ -285,7 +340,7 @@ export default function GameDetailPage({ params }: GamePageProps) {
               <button
                 onClick={() => setIsBookingOpen(true)}
                 disabled={game.status === 'closed'}
-                className={`w-full py-4 px-6 rounded-2xl text-sm sm:text-base font-bold tracking-wide transition-all shadow-xl flex items-center justify-center gap-2 ${
+                className={`w-full py-4 px-6 rounded-2xl text-sm sm:text-base font-bold tracking-wide transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer ${
                   game.status === 'closed'
                     ? 'bg-gray-800 text-gray-400 cursor-not-allowed'
                     : freeSeats > 0

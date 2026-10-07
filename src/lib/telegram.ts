@@ -99,7 +99,7 @@ function formatContact(contact: string): string {
     const username = trimmed.slice(1);
     return `<a href="https://t.me/${username}">${trimmed}</a>`;
   }
-  if (trimmed.startsWith('vk.com/')) {
+  if (trimmed.startsWith('vk.com/') || trimmed.startsWith('t.me/')) {
     return `<a href="https://${trimmed}">${trimmed}</a>`;
   }
   return escapeHtml(trimmed);

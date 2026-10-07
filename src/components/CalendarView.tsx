@@ -10,6 +10,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { GameWithBookings } from '@/lib/types';
+import { formatRuDate } from '@/lib/dateUtils';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, MapPin, Users, Sparkles, PartyPopper } from 'lucide-react';
 
 interface CalendarViewProps {
@@ -53,12 +54,16 @@ export function CalendarView({ games, onBookClick }: CalendarViewProps) {
     const formattedDay = String(dayNum).padStart(2, '0');
     const targetDateStr = `${year}-${formattedMonth}-${formattedDay}`;
 
-    return games.filter((g) => g.date === targetDateStr);
+    return games.filter((g) => {
+      if (g.date === targetDateStr) return true;
+      if (g.dates && g.dates.includes(targetDateStr)) return true;
+      return false;
+    });
   };
 
   // Игры выбранного дня
   const activeSelectedGames = selectedDay
-    ? games.filter((g) => g.date === selectedDay)
+    ? games.filter((g) => g.date === selectedDay || (g.dates && g.dates.includes(selectedDay)))
     : [];
 
   return (
@@ -182,7 +187,7 @@ export function CalendarView({ games, onBookClick }: CalendarViewProps) {
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-pixy text-lg text-yellow-300 flex items-center gap-2">
               <CalendarIcon className="w-4 h-4" />
-              <span>События на {selectedDay}:</span>
+              <span>События на {formatRuDate(selectedDay)}:</span>
             </h3>
             <button
               onClick={() => setSelectedDay(null)}

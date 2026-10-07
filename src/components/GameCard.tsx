@@ -3,18 +3,14 @@
  * @description Карточка настольной или ролевой игры для витрины анонсов клуба «СОЗВЕЗДИЕ» (ГУАП).
  * 
  * Назначение:
- * Отображает ключевые сведения о предстоящей или архивной партии: НРИ-систему, ведущего,
- * дату и аудиторию в ГУАП, прогресс заполнения стола и список участников.
+ * Отображает ключевые сведения о предстоящей или архивной партии: НРИ-систему, формат («Кампания», «Игротека», «Прочее»),
+ * ведущего, дату и аудиторию в ГУАП, прогресс заполнения стола и список участников с прямыми кликабельными контактами для ДМов.
  * 
  * Принцип работы:
- * 1. Вычисляет статус заполненности (основной состав, лист ожидания, свободный вход).
- * 2. Применяет табличные цифры (tabular-nums) для стабильного отображения счетчиков и времени без скачков верстки.
- * 3. Позволяет скопировать прямую ссылку на карточку игры в буфер обмена.
- * 4. Предоставляет кнопку перехода к форме записи (onBookClick) или просмотру страницы игры.
- * 
- * Стандарты UI/UX:
- * - Реализован согласно принципам better-ui и better-typography:
- *   концентрические скругления элементов, лаконичный текст, отсутствие лишних неоновых пятен и эмодзи-шума.
+ * 1. Вычисляет статус заполненности стола (основной состав, лист ожидания, свободный вход).
+ * 2. Для кампаний выводит расписание всех сессий.
+ * 3. Делает имена участников интерактивными ссылками (Telegram/ВК), чтобы мастера могли связаться с игроками прямо с главной страницы без доступа в админку.
+ * 4. Предоставляет возможность скопировать прямую ссылку на игру и перейти к форме записи.
  */
 
 'use client';
@@ -32,9 +28,11 @@ import {
   Share2, 
   Check, 
   ArrowRight,
-  Info
+  Info,
+  ExternalLink
 } from 'lucide-react';
 import { GameWithBookings } from '@/lib/types';
+import { formatRuDate } from '@/lib/dateUtils';
 
 interface GameCardProps {
   game: GameWithBookings;
@@ -72,6 +70,18 @@ export function GameCard({ game, onBookClick }: GameCardProps) {
     return 'bg-purple-950/70 text-purple-200 border-purple-500/35';
   };
 
+  const getContactUrl = (contact: string) => {
+    const trimmed = contact.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+    if (trimmed.startsWith('@')) return `https://t.me/${trimmed.slice(1)}`;
+    if (trimmed.startsWith('t.me/')) return `https://${trimmed}`;
+    if (trimmed.startsWith('vk.com/')) return `https://${trimmed}`;
+    return `https://t.me/${trimmed}`;
+  };
+
+  const isCampaign = game.eventType === 'campaign';
+  const isOther = game.eventType === 'other';
+
   return (
     <div 
       id={`game-${game.id}`}
@@ -80,12 +90,28 @@ export function GameCard({ game, onBookClick }: GameCardProps) {
       }`}
     >
       <div>
-        {/* Верхняя строка: Бейдж системы, статус и кнопка прямой ссылки */}
+        {/* Верхняя строка: Бейдж системы, формата, статус и кнопка прямой ссылки */}
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className={`px-2.5 py-0.5 rounded-md text-xs font-medium border ${getSystemBadgeColor(game.system)}`}>
               {game.system}
             </span>
+
+            {/* Бейдж Кампания или Прочее */}
+            {isCampaign && (
+              <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-500/40 flex items-center gap-1">
+                <span>🗺️ Кампания</span>
+                {game.dates && game.dates.length > 1 && (
+                  <span className="tabular-nums font-mono text-[10px]">({game.dates.length} сессий)</span>
+                )}
+              </span>
+            )}
+
+            {isOther && (
+              <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-violet-950/80 text-violet-300 border border-violet-500/40">
+                ✨ {game.customEventType || 'Спецформат'}
+              </span>
+            )}
 
             {/* Статус записи */}
             {game.isPast ? (
@@ -142,12 +168,34 @@ export function GameCard({ game, onBookClick }: GameCardProps) {
             <span>Ведущий: <strong className="text-white font-medium">{game.master}</strong></span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Calendar className="w-3.5 h-3.5 text-[#7be7ff] flex-shrink-0" />
-            <span>
-              <span className="tabular-nums">{game.date}</span> в <strong className="text-white font-medium tabular-nums">{game.time}</strong>
-            </span>
-          </div>
+          {/* Даты сессий */}
+          {isCampaign && game.dates && game.dates.length > 1 ? (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-3.5 h-3.5 text-[#7be7ff] flex-shrink-0" />
+                <span>
+                  Сессии (в <strong className="text-white font-medium tabular-nums">{game.time}</strong>):
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1 pl-5.5">
+                {game.dates.map((d, idx) => (
+                  <span 
+                    key={idx} 
+                    className="px-2 py-0.5 rounded-md bg-purple-900/50 border border-purple-700/40 text-purple-200 text-[11px]"
+                  >
+                    {idx + 1}-я: {formatRuDate(d)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Calendar className="w-3.5 h-3.5 text-[#7be7ff] flex-shrink-0" />
+              <span>
+                <span>{formatRuDate(game.date)}</span> в <strong className="text-white font-medium tabular-nums">{game.time}</strong>
+              </span>
+            </div>
+          )}
 
           <div className="flex items-center gap-2">
             <MapPin className="w-3.5 h-3.5 text-[#BB10F3] flex-shrink-0" />
@@ -213,28 +261,49 @@ export function GameCard({ game, onBookClick }: GameCardProps) {
               />
             </div>
 
-            {/* Список участников */}
-            <div className="mt-2.5 flex flex-wrap gap-1.5 items-center">
+            {/* Список участников с прямыми кликабельными контактами для ДМов */}
+            <div className="mt-2.5 space-y-1.5">
               {mainPlayers.length === 0 ? (
                 <span className="text-[11px] text-purple-400/70">
                   Свободно {game.maxPlayers} мест. Запись открыта.
                 </span>
               ) : (
-                mainPlayers.map((player) => (
-                  <span
-                    key={player.id}
-                    className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-purple-950/70 border border-purple-800/40 text-purple-200"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-300" />
-                    <span>{player.name}</span>
-                  </span>
-                ))
-              )}
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  {mainPlayers.map((player) => (
+                    <a
+                      key={player.id}
+                      href={getContactUrl(player.contact)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-purple-950/80 hover:bg-purple-900 border border-purple-800/40 hover:border-yellow-300/50 text-purple-200 hover:text-white transition-all group/player"
+                      title={`Написать игроку: ${player.contact}`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-yellow-300 group-hover/player:scale-125 transition-transform" />
+                      <span>{player.name}</span>
+                      <ExternalLink className="w-2.5 h-2.5 text-purple-400 group-hover/player:text-yellow-300 opacity-60 group-hover/player:opacity-100 transition-opacity" />
+                    </a>
+                  ))}
 
-              {waitlistPlayers.length > 0 && !game.isPast && (
-                <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-md bg-amber-950/70 border border-amber-600/40 text-amber-300 font-medium tabular-nums">
-                  +{waitlistPlayers.length} в резерве
-                </span>
+                  {waitlistPlayers.length > 0 && !game.isPast && (
+                    <div className="flex flex-wrap gap-1 items-center">
+                      {waitlistPlayers.map((player) => (
+                        <a
+                          key={player.id}
+                          href={getContactUrl(player.contact)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-amber-950/70 hover:bg-amber-900 border border-amber-600/40 hover:border-amber-400 text-amber-300 font-medium transition-all group/wait"
+                          title={`Игрок из резерва: ${player.contact}`}
+                        >
+                          <span>Резерв: {player.name}</span>
+                          <ExternalLink className="w-2 h-2 text-amber-400 opacity-70 group-hover/wait:opacity-100" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>

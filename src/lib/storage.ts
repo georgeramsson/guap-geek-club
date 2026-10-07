@@ -11,8 +11,9 @@
 
 import fs from 'fs';
 import path from 'path';
-import { Game, Booking, GameWithBookings, CreateGameInput, CreateBookingInput } from './types';
+import { Game, Booking, GameWithBookings, CreateGameInput, CreateBookingInput, UpdateGameInput } from './types';
 import { sendTelegramNotification } from './telegram';
+import { formatRuDate } from './dateUtils';
 import { createClient } from '@supabase/supabase-js';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -277,37 +278,79 @@ function saveLocalDb(data: LocalDatabase): void {
   }
 }
 
-function isGameInPast(dateStr: string, status: string): boolean {
+function isGameInPast(dateStr: string, status: string, dates?: string[]): boolean {
   if (status === 'archived') return true;
   const today = new Date().toISOString().split('T')[0];
+  if (dates && dates.length > 0) {
+    return dates.every((d) => d < today);
+  }
   return dateStr < today;
 }
 
-function getLocalGamesWithBookings(): GameWithBookings[] {
+function getGameSortTime(g: Game): number {
+  const today = new Date().toISOString().split('T')[0];
+  let targetDate = g.date;
+  if (g.dates && g.dates.length > 0) {
+    const upcoming = g.dates.filter((d) => d >= today).sort();
+    targetDate = upcoming.length > 0 ? upcoming[0] : g.dates[g.dates.length - 1];
+  }
+  const timeMatch = g.time?.match(/\d{1,2}:\d{2}/)?.[0] || '00:00';
+  const timeStr = timeMatch.padStart(5, '0');
+  return new Date(`${targetDate}T${timeStr}`).getTime() || 0;
+}
+
+function sortGamesWithBookings(list: GameWithBookings[]): GameWithBookings[] {
+  const upcoming = list.filter((g) => !g.isPast);
+  const past = list.filter((g) => g.isPast);
+
+  // Предстоящие: первыми идут самые близкие по дате проекты (по возрастанию даты)
+  upcoming.sort((a, b) => getGameSortTime(a) - getGameSortTime(b));
+
+  // Архивные: самые недавние из прошедших первыми
+  past.sort((a, b) => getGameSortTime(b) - getGameSortTime(a));
+
+  return [...upcoming, ...past];
+}
+
+export function isGameScheduled(publishAt?: string): boolean {
+  if (!publishAt) return false;
+  return new Date(publishAt).getTime() > Date.now();
+}
+
+function getLocalGamesWithBookings(includeUnpublished = false): GameWithBookings[] {
   const db = initLocalDb();
-  return db.games.map((game) => {
+  const mapped = db.games.map((game) => {
     const gameBookings = db.bookings.filter((b) => b.gameId === game.id);
     const players = gameBookings.filter((b) => !b.isWaitlist);
     const waitlist = gameBookings.filter((b) => b.isWaitlist);
     const requiresB = game.requiresBooking ?? (game.eventType !== 'open_boardgame');
+    const datesArray = game.dates && game.dates.length > 0 ? game.dates : [game.date];
+    const isScheduled = isGameScheduled(game.publishAt);
 
     return {
       ...game,
       eventType: game.eventType || 'rpg',
+      customEventType: game.customEventType,
+      dates: datesArray,
       requiresBooking: requiresB,
+      publishAt: game.publishAt,
+      isScheduled,
       bookings: gameBookings,
       playersCount: players.length,
       waitlistCount: waitlist.length,
       isFull: requiresB && game.maxPlayers > 0 && players.length >= game.maxPlayers,
-      isPast: isGameInPast(game.date, game.status),
+      isPast: isGameInPast(game.date, game.status, datesArray),
     };
   });
+
+  const filtered = includeUnpublished ? mapped : mapped.filter((g) => !g.isScheduled);
+  return sortGamesWithBookings(filtered);
 }
 
 /**
  * Получить список всех игр с информацией о записях
  */
-export async function getGamesWithBookings(): Promise<GameWithBookings[]> {
+export async function getGamesWithBookings(includeUnpublished = false): Promise<GameWithBookings[]> {
   if (isSupabaseEnabled && supabase) {
     try {
       const { data: games, error: gamesErr } = await supabase
@@ -317,7 +360,7 @@ export async function getGamesWithBookings(): Promise<GameWithBookings[]> {
 
       if (gamesErr) {
         console.error('[Supabase getGames error, falling back to local]:', gamesErr);
-        return getLocalGamesWithBookings();
+        return getLocalGamesWithBookings(includeUnpublished);
       }
 
       let gamesData = games || [];
@@ -390,12 +433,13 @@ export async function getGamesWithBookings(): Promise<GameWithBookings[]> {
         createdAt: b.created_at,
       }));
 
-      return gamesData.map((g) => {
+      const mapped = gamesData.map((g) => {
         const gameBookings = allBookings.filter((b) => b.gameId === g.id);
         const players = gameBookings.filter((b) => !b.isWaitlist);
         const waitlist = gameBookings.filter((b) => b.isWaitlist);
         const maxP = g.max_players ?? 5;
         const requiresB = g.requires_booking ?? (g.event_type !== 'open_boardgame');
+        const datesArray = Array.isArray(g.dates) && g.dates.length > 0 ? g.dates : [g.date];
 
         return {
           id: g.id,
@@ -410,30 +454,37 @@ export async function getGamesWithBookings(): Promise<GameWithBookings[]> {
           tags: g.tags || [],
           status: g.status,
           eventType: g.event_type || 'rpg',
+          customEventType: g.custom_event_type,
+          dates: datesArray,
           requiresBooking: requiresB,
+          publishAt: g.publish_at || g.publishAt,
+          isScheduled: isGameScheduled(g.publish_at || g.publishAt),
           createdAt: g.created_at,
           bookings: gameBookings,
           playersCount: players.length,
           waitlistCount: waitlist.length,
           isFull: requiresB && maxP > 0 && players.length >= maxP,
-          isPast: isGameInPast(g.date, g.status),
+          isPast: isGameInPast(g.date, g.status, datesArray),
         };
       });
+
+      const filtered = includeUnpublished ? mapped : mapped.filter((g) => !g.isScheduled);
+      return sortGamesWithBookings(filtered);
     } catch (sbErr) {
       console.error('[Supabase getGames exception, falling back to local]:', sbErr);
-      return getLocalGamesWithBookings();
+      return getLocalGamesWithBookings(includeUnpublished);
     }
   }
 
   // Локальный режим
-  return getLocalGamesWithBookings();
+  return getLocalGamesWithBookings(includeUnpublished);
 }
 
 /**
  * Получить конкретную игру по ID (для страницы /games/[id])
  */
-export async function getGameById(id: string): Promise<GameWithBookings | null> {
-  const games = await getGamesWithBookings();
+export async function getGameById(id: string, includeUnpublished = true): Promise<GameWithBookings | null> {
+  const games = await getGamesWithBookings(includeUnpublished);
   return games.find((g) => g.id === id) || null;
 }
 
@@ -531,11 +582,16 @@ export async function createBooking(input: CreateBookingInput): Promise<{
       };
 
       try {
+        const gameDates = Array.isArray(game.dates) && game.dates.length > 0 ? game.dates : [game.date];
+        const dateText = gameDates.length > 1
+          ? gameDates.map((d: string) => formatRuDate(d)).join(', ')
+          : formatRuDate(game.date);
+
         await sendTelegramNotification({
           gameTitle: game.title,
           system: game.system,
           master: game.master,
-          dateTime: `${game.date} в ${game.time}`,
+          dateTime: `${dateText} в ${game.time}`,
           location: game.location,
           playerName: cleanName,
           playerContact: cleanContact,
@@ -595,11 +651,16 @@ export async function createBooking(input: CreateBookingInput): Promise<{
   db.bookings.push(newBooking);
   saveLocalDb(db);
 
+  const localGameDates = game.dates && game.dates.length > 0 ? game.dates : [game.date];
+  const localDateText = localGameDates.length > 1
+    ? localGameDates.map((d) => formatRuDate(d)).join(', ')
+    : formatRuDate(game.date);
+
   await sendTelegramNotification({
     gameTitle: game.title,
     system: game.system,
     master: game.master,
-    dateTime: `${game.date} в ${game.time}`,
+    dateTime: `${localDateText} в ${game.time}`,
     location: game.location,
     playerName: cleanName,
     playerContact: cleanContact,
@@ -671,9 +732,13 @@ export async function cancelBooking(bookingId: string): Promise<boolean> {
 /**
  * Создание новой игры / игротеки
  */
+/**
+ * Создание новой игры / игротеки
+ */
 export async function createGame(input: CreateGameInput): Promise<Game> {
   const eventType = input.eventType || (input.requiresBooking === false ? 'open_boardgame' : 'rpg');
   const requiresBooking = input.requiresBooking !== undefined ? input.requiresBooking : (eventType !== 'open_boardgame');
+  const dates = input.dates && input.dates.length > 0 ? input.dates : [input.date];
 
   const newGame: Game = {
     id: `game-${Date.now()}`,
@@ -688,37 +753,72 @@ export async function createGame(input: CreateGameInput): Promise<Game> {
     tags: input.tags,
     status: 'open',
     eventType,
+    customEventType: input.customEventType?.trim() || undefined,
+    dates,
     requiresBooking,
+    publishAt: input.publishAt?.trim() || undefined,
     createdAt: new Date().toISOString(),
   };
 
   if (isSupabaseEnabled && supabase) {
     try {
+      const payload: any = {
+        title: newGame.title,
+        system: newGame.system,
+        master: newGame.master,
+        date: newGame.date,
+        time: newGame.time,
+        location: newGame.location,
+        max_players: newGame.maxPlayers,
+        description: newGame.description,
+        tags: newGame.tags,
+        status: newGame.status,
+        event_type: newGame.eventType,
+        requires_booking: newGame.requiresBooking,
+        dates: newGame.dates,
+        custom_event_type: newGame.customEventType,
+        publish_at: newGame.publishAt || null,
+      };
+
       const { data, error } = await supabase
         .from('games')
-        .insert({
-          title: newGame.title,
-          system: newGame.system,
-          master: newGame.master,
-          date: newGame.date,
-          time: newGame.time,
-          location: newGame.location,
-          max_players: newGame.maxPlayers,
-          description: newGame.description,
-          tags: newGame.tags,
-          status: newGame.status,
-          event_type: newGame.eventType,
-          requires_booking: newGame.requiresBooking,
-        })
+        .insert(payload)
         .select()
         .single();
 
       if (error) {
-        console.error('[Supabase createGame error, saving to local fallback]:', error);
-        const db = initLocalDb();
-        db.games.unshift(newGame);
-        saveLocalDb(db);
-        return newGame;
+        console.error('[Supabase createGame error, trying fallback without extra columns or saving locally]:', error);
+        const { data: fbData, error: fbErr } = await supabase
+          .from('games')
+          .insert({
+            title: newGame.title,
+            system: newGame.system,
+            master: newGame.master,
+            date: newGame.date,
+            time: newGame.time,
+            location: newGame.location,
+            max_players: newGame.maxPlayers,
+            description: newGame.description,
+            tags: newGame.tags,
+            status: newGame.status,
+            event_type: newGame.eventType === 'campaign' || newGame.eventType === 'other' ? 'rpg' : newGame.eventType,
+            requires_booking: newGame.requiresBooking,
+          })
+          .select()
+          .single();
+
+        if (fbErr) {
+          const db = initLocalDb();
+          db.games.unshift(newGame);
+          saveLocalDb(db);
+          return newGame;
+        }
+
+        return {
+          ...newGame,
+          id: fbData.id,
+          createdAt: fbData.created_at,
+        };
       }
 
       return {
@@ -733,7 +833,9 @@ export async function createGame(input: CreateGameInput): Promise<Game> {
         description: data.description,
         tags: data.tags,
         status: data.status,
-        eventType: data.event_type,
+        eventType: (data.event_type as any) || newGame.eventType,
+        customEventType: data.custom_event_type || newGame.customEventType,
+        dates: Array.isArray(data.dates) && data.dates.length > 0 ? data.dates : newGame.dates,
         requiresBooking: data.requires_booking,
         createdAt: data.created_at,
       };
@@ -750,6 +852,88 @@ export async function createGame(input: CreateGameInput): Promise<Game> {
   db.games.unshift(newGame);
   saveLocalDb(db);
   return newGame;
+}
+
+/**
+ * Редактирование существующей игры / игротеки
+ */
+export async function updateGame(
+  gameId: string,
+  input: UpdateGameInput
+): Promise<GameWithBookings | null> {
+  const db = initLocalDb();
+  const localIndex = db.games.findIndex((g) => g.id === gameId);
+
+  if (localIndex !== -1) {
+    const existing = db.games[localIndex];
+    db.games[localIndex] = {
+      ...existing,
+      ...(input.title !== undefined && { title: input.title.trim() }),
+      ...(input.system !== undefined && { system: input.system.trim() }),
+      ...(input.master !== undefined && { master: input.master.trim() }),
+      ...(input.date !== undefined && { date: input.date }),
+      ...(input.time !== undefined && { time: input.time }),
+      ...(input.location !== undefined && { location: input.location.trim() }),
+      ...(input.maxPlayers !== undefined && { maxPlayers: Number(input.maxPlayers) }),
+      ...(input.description !== undefined && { description: input.description.trim() }),
+      ...(input.tags !== undefined && { tags: input.tags }),
+      ...(input.status !== undefined && { status: input.status }),
+      ...(input.eventType !== undefined && { eventType: input.eventType }),
+      ...(input.customEventType !== undefined && { customEventType: input.customEventType.trim() }),
+      ...(input.dates !== undefined && { dates: input.dates }),
+      ...(input.requiresBooking !== undefined && { requiresBooking: input.requiresBooking }),
+      ...(input.publishAt !== undefined && { publishAt: input.publishAt ? input.publishAt.trim() : undefined }),
+    };
+    saveLocalDb(db);
+  }
+
+  if (isSupabaseEnabled && supabase) {
+    try {
+      const payload: any = {};
+      if (input.title !== undefined) payload.title = input.title.trim();
+      if (input.system !== undefined) payload.system = input.system.trim();
+      if (input.master !== undefined) payload.master = input.master.trim();
+      if (input.date !== undefined) payload.date = input.date;
+      if (input.time !== undefined) payload.time = input.time;
+      if (input.location !== undefined) payload.location = input.location.trim();
+      if (input.maxPlayers !== undefined) payload.max_players = Number(input.maxPlayers);
+      if (input.description !== undefined) payload.description = input.description.trim();
+      if (input.tags !== undefined) payload.tags = input.tags;
+      if (input.status !== undefined) payload.status = input.status;
+      if (input.eventType !== undefined) payload.event_type = input.eventType;
+      if (input.customEventType !== undefined) payload.custom_event_type = input.customEventType.trim();
+      if (input.dates !== undefined) payload.dates = input.dates;
+      if (input.requiresBooking !== undefined) payload.requires_booking = input.requiresBooking;
+      if (input.publishAt !== undefined) payload.publish_at = input.publishAt ? input.publishAt.trim() : null;
+
+      const { error } = await supabase
+        .from('games')
+        .update(payload)
+        .eq('id', gameId);
+
+      if (error) {
+        console.error('[Supabase updateGame error, trying fallback]:', error);
+        delete payload.custom_event_type;
+        delete payload.dates;
+        delete payload.publish_at;
+        if (payload.event_type && !['rpg', 'open_boardgame'].includes(payload.event_type)) {
+          delete payload.event_type;
+        }
+        await supabase.from('games').update(payload).eq('id', gameId);
+      }
+    } catch (sbErr) {
+      console.error('[Supabase updateGame exception]:', sbErr);
+    }
+  }
+
+  return getGameById(gameId, true);
+}
+
+/**
+ * Опубликовать отложенный анонс немедленно
+ */
+export async function publishGameNow(gameId: string): Promise<GameWithBookings | null> {
+  return updateGame(gameId, { publishAt: null });
 }
 
 export async function updateGameStatus(

@@ -3,19 +3,14 @@
  * @description Главная страница клуба «СОЗВЕЗДИЕ» (ГУАП Geek Club).
  * 
  * Назначение:
- * Предоставляет студентам витрину открытых игротек и партий по НРИ с живым учетом мест,
- * фильтрацией по игровым системам, поиском, переключением в интерактивный календарь и архив.
+ * Предоставляет студентам витрину открытых игротек, кампаний и партий по НРИ с живым учетом мест,
+ * фильтрацией по игровым системам и форматам, поиском и переключением в интерактивный календарь.
  * 
  * Принцип работы:
  * 1. Загружает список сессий через GET /api/games с фоновым поллингом раз в 30 секунд.
- * 2. Разделяет игры на актуальные и архивные, вычисляет метрики свободных мест с tabular-nums.
- * 3. Поддерживает три режима просмотра: карточки (витрина), календарь и архив сыгранных партий.
- * 4. Управляет открытием модального окна записи (BookingModal) с передачей выбранной игры.
- * 
- * Стандарты UI/UX:
- * - Соответствие design engineering (better-ui, better-typography, better-writing):
- *   концентрические скругления, оптическое выравнивание, табличные цифры, сдержанные анимации
- *   и лаконичный человечный текст без дешевого ИИ-слопа.
+ * 2. Отображает только актуальные предстоящие проекты, отсортированные по возрастанию даты (ближайшие игры первыми).
+ * 3. Архивные и прошедшие партии на главной не отображаются.
+ * 4. Предоставляет памятку для участников (включая правила оформления пропуска для гостей не из ГУАП).
  */
 
 'use client';
@@ -34,8 +29,8 @@ import {
   RefreshCw, 
   HelpCircle, 
   LayoutGrid, 
-  History,
-  RotateCcw
+  RotateCcw,
+  ExternalLink
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -44,8 +39,8 @@ export default function HomePage() {
   const [selectedGameForBooking, setSelectedGameForBooking] = useState<GameWithBookings | null>(null);
   const [isBookingOpen, setIsBookingOpen] = useState(false);
 
-  // Режим отображения: 'cards' (витрина), 'calendar' (календарь), 'archive' (прошедшие игры)
-  const [viewMode, setViewMode] = useState<'cards' | 'calendar' | 'archive'>('cards');
+  // Режим отображения: 'cards' (витрина) или 'calendar' (календарь)
+  const [viewMode, setViewMode] = useState<'cards' | 'calendar'>('cards');
   
   const [activeFilter, setActiveFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -92,30 +87,43 @@ export default function HomePage() {
     fetchGames();
   };
 
-  // Разделение на актуальные и прошедшие
-  const upcomingGames = games.filter((g) => !g.isPast);
-  const pastGames = games.filter((g) => g.isPast);
+  // Только предстоящие игры, отсортированные хронологически (самые близкие по дате — первыми)
+  const upcomingGames = games
+    .filter((g) => !g.isPast && g.status !== 'archived')
+    .sort((a, b) => {
+      const today = new Date().toISOString().split('T')[0];
+      const getSortDate = (g: GameWithBookings) => {
+        if (g.dates && g.dates.length > 0) {
+          const upcoming = g.dates.filter((d) => d >= today).sort();
+          return upcoming.length > 0 ? upcoming[0] : g.dates[0];
+        }
+        return g.date;
+      };
+      const timeA = (a.time?.match(/\d{1,2}:\d{2}/)?.[0] || '00:00').padStart(5, '0');
+      const timeB = (b.time?.match(/\d{1,2}:\d{2}/)?.[0] || '00:00').padStart(5, '0');
+      return new Date(`${getSortDate(a)}T${timeA}`).getTime() - new Date(`${getSortDate(b)}T${timeB}`).getTime();
+    });
 
-  // Список игр для отображения в зависимости от режима
-  const currentList = viewMode === 'archive' ? pastGames : upcomingGames;
-
-  const filteredGames = currentList.filter((game) => {
+  const filteredGames = upcomingGames.filter((game) => {
     const q = searchQuery.toLowerCase().trim();
     const matchesSearch = 
       !q ||
       game.title.toLowerCase().includes(q) ||
       game.system.toLowerCase().includes(q) ||
       game.master.toLowerCase().includes(q) ||
-      game.location.toLowerCase().includes(q);
+      game.location.toLowerCase().includes(q) ||
+      (game.customEventType && game.customEventType.toLowerCase().includes(q));
 
     if (!matchesSearch) return false;
 
     if (activeFilter === 'all') return true;
+    if (activeFilter === 'campaign') return game.eventType === 'campaign';
     if (activeFilter === 'dnd') return game.system.toLowerCase().includes('d&d') || game.system.toLowerCase().includes('dnd');
     if (activeFilter === 'wfrp') return game.system.toLowerCase().includes('wfrp') || game.system.toLowerCase().includes('warhammer') || game.system.toLowerCase().includes('вархаммер');
     if (activeFilter === 'vampire') return game.system.toLowerCase().includes('вампир') || game.system.toLowerCase().includes('маскарад') || game.system.toLowerCase().includes('vampire');
     if (activeFilter === 'pathfinder') return game.system.toLowerCase().includes('pathfinder') || game.system.toLowerCase().includes('пасфайндер');
     if (activeFilter === 'boardgames') return game.eventType === 'open_boardgame' || game.system.toLowerCase().includes('игротек') || game.system.toLowerCase().includes('настол');
+    if (activeFilter === 'other') return game.eventType === 'other';
 
     return true;
   });
@@ -134,7 +142,7 @@ export default function HomePage() {
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
         
-        {/* Главный Hero-баннер клуба: концентрические скругления, чистые акценты */}
+        {/* Главный Hero-баннер клуба */}
         <section className="relative rounded-2xl p-6 sm:p-10 mb-8 overflow-hidden glass-panel border border-purple-500/20">
           <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
             <div className="max-w-2xl text-center md:text-left">
@@ -160,7 +168,7 @@ export default function HomePage() {
                   <div className="text-2xl sm:text-3xl font-bold text-yellow-300 font-pixy tabular-nums">
                     {activeUpcomingCount}
                   </div>
-                  <div className="text-[11px] text-purple-300/80 mt-0.5">Активных игр</div>
+                  <div className="text-[11px] text-purple-300/80 mt-0.5">Ближайших игр</div>
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-purple-950/50 border border-purple-800/30 text-center">
@@ -180,7 +188,7 @@ export default function HomePage() {
 
             </div>
 
-            {/* Фирменный логотип клуба с мягким интерактивным эффектом */}
+            {/* Фирменный логотип клуба */}
             <div className="relative w-44 h-44 sm:w-56 sm:h-56 flex-shrink-0 transition-transform duration-300 hover:scale-[1.03]">
               <Image
                 src="/logo-stars.png"
@@ -199,7 +207,7 @@ export default function HomePage() {
           <div className="flex items-center p-1 rounded-xl bg-purple-950/70 border border-purple-800/40">
             <button
               onClick={() => setViewMode('cards')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 viewMode === 'cards'
                   ? 'bg-gradient-accent text-[#0B0741] font-semibold shadow-sm'
                   : 'text-purple-300 hover:text-white'
@@ -211,7 +219,7 @@ export default function HomePage() {
 
             <button
               onClick={() => setViewMode('calendar')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 viewMode === 'calendar'
                   ? 'bg-gradient-accent text-[#0B0741] font-semibold shadow-sm'
                   : 'text-purple-300 hover:text-white'
@@ -220,24 +228,12 @@ export default function HomePage() {
               <CalendarIcon className="w-3.5 h-3.5" />
               <span>Календарь событий</span>
             </button>
-
-            <button
-              onClick={() => setViewMode('archive')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                viewMode === 'archive'
-                  ? 'bg-gradient-accent text-[#0B0741] font-semibold shadow-sm'
-                  : 'text-purple-300 hover:text-white'
-              }`}
-            >
-              <History className="w-3.5 h-3.5" />
-              <span>Архив партий ({pastGames.length})</span>
-            </button>
           </div>
 
           {/* Быстрое обновление */}
           <button
             onClick={fetchGames}
-            className="p-2 rounded-lg bg-purple-950/60 border border-purple-800/40 text-purple-300 hover:text-white hover:bg-purple-900/40 transition-colors ml-auto"
+            className="p-2 rounded-lg bg-purple-950/60 border border-purple-800/40 text-purple-300 hover:text-white hover:bg-purple-900/40 transition-colors ml-auto cursor-pointer"
             title="Обновить список игр"
             aria-label="Обновить список игр"
           >
@@ -248,29 +244,31 @@ export default function HomePage() {
         {/* Если выбран режим КАЛЕНДАРЬ */}
         {viewMode === 'calendar' ? (
           <section className="mb-12">
-            <CalendarView games={games} onBookClick={handleOpenBooking} />
+            <CalendarView games={upcomingGames} onBookClick={handleOpenBooking} />
           </section>
         ) : (
-          /* Режим СПИСКА (Витрина или Архив) */
+          /* Режим СПИСКА (Витрина предстоящих игр) */
           <>
             {/* Панель фильтров и поиска */}
             <section className="mb-6 space-y-3">
               <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
                 
-                {/* Вкладки игровых систем */}
+                {/* Вкладки форматов и систем */}
                 <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
                   {[
                     { id: 'all', label: 'Все события' },
+                    { id: 'campaign', label: '🗺️ Кампании' },
                     { id: 'dnd', label: 'D&D 5e' },
                     { id: 'wfrp', label: 'WFRP 4e' },
-                    { id: 'vampire', label: 'Вампиры: Маскарад' },
-                    { id: 'pathfinder', label: 'Pathfinder 2e' },
+                    { id: 'vampire', label: 'Вампиры' },
+                    { id: 'pathfinder', label: 'Pathfinder' },
                     { id: 'boardgames', label: 'Игротека' },
+                    { id: 'other', label: 'Прочее' },
                   ].map((tab) => (
                     <button
                       key={tab.id}
                       onClick={() => setActiveFilter(tab.id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
                         activeFilter === tab.id
                           ? 'bg-purple-800 text-yellow-300 border border-yellow-300/50 shadow-sm'
                           : 'bg-purple-950/50 text-purple-300 hover:text-white border border-purple-800/30 hover:bg-purple-900/30'
@@ -296,14 +294,6 @@ export default function HomePage() {
               </div>
             </section>
 
-            {/* Информационная плашка архива */}
-            {viewMode === 'archive' && (
-              <div className="p-3.5 rounded-xl bg-purple-950/40 border border-purple-800/30 mb-6 text-xs text-purple-300 flex items-center gap-2">
-                <History className="w-4 h-4 text-yellow-300 flex-shrink-0" />
-                <span>Летопись клуба: завершенные кампании, ваншоты и турниры прошлых недель.</span>
-              </div>
-            )}
-
             {/* Сетка карточек */}
             <section className="mb-12">
               {isLoading && games.length === 0 ? (
@@ -316,11 +306,11 @@ export default function HomePage() {
                   <Dices className="w-10 h-10 text-purple-400/60 mx-auto mb-2.5" />
                   <h3 className="font-pixy text-lg text-white mb-1.5">Ничего не найдено</h3>
                   <p className="text-xs text-purple-300 max-w-sm mx-auto mb-4">
-                    По выбранным параметрам нет подходящих игр.
+                    По выбранным параметрам нет подходящих предстоящих игр.
                   </p>
                   <button
                     onClick={() => { setActiveFilter('all'); setSearchQuery(''); }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium bg-purple-900/80 text-yellow-300 border border-yellow-300/30 hover:bg-purple-850 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium bg-purple-900/80 text-yellow-300 border border-yellow-300/30 hover:bg-purple-850 transition-colors cursor-pointer"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                     <span>Сбросить фильтры</span>
@@ -341,7 +331,7 @@ export default function HomePage() {
           </>
         )}
 
-        {/* Памятка для новичка: структурированная информация без лишней воды */}
+        {/* Памятка для участников */}
         <section className="rounded-2xl p-6 sm:p-8 glass-panel border border-purple-800/30 text-purple-200">
           <div className="flex items-center gap-2 mb-4">
             <HelpCircle className="w-4 h-4 text-yellow-300" />
@@ -350,7 +340,7 @@ export default function HomePage() {
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs leading-relaxed">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs leading-relaxed">
             <div className="p-3.5 rounded-xl bg-purple-950/40 border border-purple-900/30">
               <h3 className="font-bold text-white mb-1 flex items-center gap-1.5 text-sm">
                 <span>🎲</span>
@@ -364,11 +354,33 @@ export default function HomePage() {
             <div className="p-3.5 rounded-xl bg-purple-950/40 border border-purple-900/30">
               <h3 className="font-bold text-white mb-1 flex items-center gap-1.5 text-sm">
                 <span>🎒</span>
-                <span>Что нужно взять с собой</span>
+                <span>Что нужно студентам ГУАП</span>
               </h3>
               <p className="text-purple-300/80">
                 Студенческий билет для прохода в корпус ГУАП. Дайсы, карандаши и поля есть в клубе, но свои кубики всегда приветствуются.
               </p>
+            </div>
+
+            {/* Карточка для гостей не из ГУАП */}
+            <div className="p-3.5 rounded-xl bg-purple-950/40 border border-yellow-500/30 flex flex-col justify-between">
+              <div>
+                <h3 className="font-bold text-white mb-1 flex items-center gap-1.5 text-sm">
+                  <span>🏛️</span>
+                  <span className="text-yellow-300">Не студент ГУАП?</span>
+                </h3>
+                <p className="text-purple-300/80 mb-2.5">
+                  Для оформления гостевого пропуска в корпус университета напишите <b>за 3 дня до мероприятия</b> руководителю клуба Марку.
+                </p>
+              </div>
+              <a
+                href="https://t.me/hakich"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-900/70 hover:bg-purple-800 text-yellow-300 border border-purple-700/50 text-xs font-semibold transition-colors"
+              >
+                <span>Написать Марку (@hakich)</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
             </div>
 
             <div className="p-3.5 rounded-xl bg-purple-950/40 border border-purple-900/30">

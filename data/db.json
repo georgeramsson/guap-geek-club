@@ -1,6 +1,46 @@
 {
   "games": [
     {
+      "id": "game-1791383748114",
+      "title": "игротека",
+      "system": "Игротека",
+      "master": "оксана",
+      "date": "2026-10-09",
+      "time": "18:00",
+      "location": "Большая Морская 67, ауд. 13-04",
+      "maxPlayers": 0,
+      "description": "ооо",
+      "tags": [],
+      "status": "open",
+      "eventType": "open_boardgame",
+      "dates": [
+        "2026-10-07"
+      ],
+      "requiresBooking": false,
+      "createdAt": "2026-10-07T14:35:48.114Z"
+    },
+    {
+      "id": "game-1791383725537",
+      "title": "Проклятие Страда",
+      "system": "D&D 5e",
+      "master": "Оксана",
+      "date": "2026-10-08",
+      "time": "16:40",
+      "location": "Ленсовета 33-02",
+      "maxPlayers": 4,
+      "description": "лллл",
+      "tags": [],
+      "status": "open",
+      "eventType": "campaign",
+      "customEventType": "",
+      "dates": [
+        "2026-10-08",
+        "2026-10-21"
+      ],
+      "requiresBooking": true,
+      "createdAt": "2026-10-07T14:35:25.537Z"
+    },
+    {
       "id": "game-1",
       "title": "Пепел Богенхафена: Тени над ярмаркой",
       "system": "WFRP 4e",
@@ -189,6 +229,15 @@
       "comment": "Воин 4 ур.",
       "isWaitlist": false,
       "createdAt": "2026-09-18T15:53:31.269Z"
+    },
+    {
+      "id": "b-1791383801188",
+      "gameId": "game-1791383725537",
+      "name": "О",
+      "contact": "@Okssi667",
+      "comment": "Опыт: Опытный игрок. Пожелания: hhh",
+      "isWaitlist": false,
+      "createdAt": "2026-10-07T14:36:41.188Z"
     }
   ]
 }
