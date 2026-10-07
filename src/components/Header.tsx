@@ -20,7 +20,7 @@
 import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Shield, Send } from 'lucide-react';
+import { Shield, Send, Archive } from 'lucide-react';
 
 export function Header() {
   return (
@@ -57,6 +57,17 @@ export function Header() {
 
           {/* Социальные ссылки и админка */}
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Архив сыгранных партий */}
+            <Link
+              href="/archive"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-purple-200 bg-purple-950/60 hover:bg-purple-900/60 border border-purple-700/40 transition-all hover:text-white"
+              title="Летопись и архив сыгранных партий"
+              aria-label="Архив партий"
+            >
+              <Archive className="w-3.5 h-3.5 text-purple-300" />
+              <span className="hidden sm:inline">Архив партий</span>
+            </Link>
+
             {/* ВК группа */}
             <a
               href="https://vk.ru/guap_geek_club"

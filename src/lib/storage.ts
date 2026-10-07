@@ -738,7 +738,10 @@ export async function cancelBooking(bookingId: string): Promise<boolean> {
 export async function createGame(input: CreateGameInput): Promise<Game> {
   const eventType = input.eventType || (input.requiresBooking === false ? 'open_boardgame' : 'rpg');
   const requiresBooking = input.requiresBooking !== undefined ? input.requiresBooking : (eventType !== 'open_boardgame');
-  const dates = input.dates && input.dates.length > 0 ? input.dates : [input.date];
+  const isCampaign = eventType === 'campaign';
+  const dates = (isCampaign && input.dates && input.dates.length > 0)
+    ? input.dates
+    : [input.date];
 
   const newGame: Game = {
     id: `game-${Date.now()}`,
@@ -866,21 +869,27 @@ export async function updateGame(
 
   if (localIndex !== -1) {
     const existing = db.games[localIndex];
+    const finalEventType = input.eventType !== undefined ? input.eventType : existing.eventType;
+    const finalDate = input.date !== undefined ? input.date : existing.date;
+    const finalDates = finalEventType === 'campaign'
+      ? (input.dates && input.dates.length > 0 ? input.dates : existing.dates || [finalDate])
+      : [finalDate];
+
     db.games[localIndex] = {
       ...existing,
       ...(input.title !== undefined && { title: input.title.trim() }),
       ...(input.system !== undefined && { system: input.system.trim() }),
       ...(input.master !== undefined && { master: input.master.trim() }),
-      ...(input.date !== undefined && { date: input.date }),
+      date: finalDate,
       ...(input.time !== undefined && { time: input.time }),
       ...(input.location !== undefined && { location: input.location.trim() }),
       ...(input.maxPlayers !== undefined && { maxPlayers: Number(input.maxPlayers) }),
       ...(input.description !== undefined && { description: input.description.trim() }),
       ...(input.tags !== undefined && { tags: input.tags }),
       ...(input.status !== undefined && { status: input.status }),
-      ...(input.eventType !== undefined && { eventType: input.eventType }),
+      eventType: finalEventType,
       ...(input.customEventType !== undefined && { customEventType: input.customEventType.trim() }),
-      ...(input.dates !== undefined && { dates: input.dates }),
+      dates: finalDates,
       ...(input.requiresBooking !== undefined && { requiresBooking: input.requiresBooking }),
       ...(input.publishAt !== undefined && { publishAt: input.publishAt ? input.publishAt.trim() : undefined }),
     };
@@ -902,7 +911,11 @@ export async function updateGame(
       if (input.status !== undefined) payload.status = input.status;
       if (input.eventType !== undefined) payload.event_type = input.eventType;
       if (input.customEventType !== undefined) payload.custom_event_type = input.customEventType.trim();
-      if (input.dates !== undefined) payload.dates = input.dates;
+      if (input.dates !== undefined) {
+        payload.dates = input.eventType === 'campaign' ? input.dates : (input.date ? [input.date] : input.dates);
+      } else if (input.date !== undefined && input.eventType !== 'campaign') {
+        payload.dates = [input.date];
+      }
       if (input.requiresBooking !== undefined) payload.requires_booking = input.requiresBooking;
       if (input.publishAt !== undefined) payload.publish_at = input.publishAt ? input.publishAt.trim() : null;
 

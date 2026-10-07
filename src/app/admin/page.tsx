@@ -44,7 +44,9 @@ import {
   Link as LinkIcon,
   Pencil,
   Plus,
-  X
+  X,
+  Archive,
+  ArchiveRestore
 } from 'lucide-react';
 
 const ADMIN_PIN_CODE = 'geek2026';
@@ -56,6 +58,7 @@ export default function AdminPage() {
 
   const [games, setGames] = useState<GameWithBookings[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [adminTab, setAdminTab] = useState<'upcoming' | 'archive' | 'all'>('upcoming');
 
   // Состояние создания
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -221,9 +224,11 @@ export default function AdminPage() {
         .map((t) => t.trim())
         .filter(Boolean);
 
-      const firstDate = newGame.eventType === 'campaign' && newGame.dates && newGame.dates.length > 0
-        ? newGame.dates[0]
-        : newGame.date;
+      const isCampaign = newGame.eventType === 'campaign';
+      const datesPayload = isCampaign && newGame.dates && newGame.dates.length > 0
+        ? newGame.dates
+        : [newGame.date];
+      const firstDate = isCampaign ? (datesPayload[0] || newGame.date) : newGame.date;
 
       const publishAtVal = isNewScheduled && newPublishAt ? newPublishAt : undefined;
 
@@ -233,6 +238,7 @@ export default function AdminPage() {
         body: JSON.stringify({
           ...newGame,
           date: firstDate,
+          dates: datesPayload,
           tags: tagsArray,
           publishAt: publishAtVal,
         }),
@@ -242,11 +248,12 @@ export default function AdminPage() {
         setIsFormOpen(false);
         setIsNewScheduled(false);
         setNewPublishAt('');
+        const todayStr = new Date().toISOString().split('T')[0];
         setNewGame({
           title: '',
           system: 'D&D 5e',
           master: '',
-          date: new Date().toISOString().split('T')[0],
+          date: todayStr,
           time: '18:00',
           location: 'Ленсовета, 33-02',
           maxPlayers: 5,
@@ -254,7 +261,7 @@ export default function AdminPage() {
           tags: ['Ваншот', 'Для новичков'],
           eventType: 'rpg',
           customEventType: '',
-          dates: [new Date().toISOString().split('T')[0]],
+          dates: [todayStr],
           requiresBooking: true,
         });
         fetchGames();
@@ -303,9 +310,11 @@ export default function AdminPage() {
         .map((t) => t.trim())
         .filter(Boolean);
 
-      const firstDate = editFormData.eventType === 'campaign' && editFormData.dates && editFormData.dates.length > 0
-        ? editFormData.dates[0]
-        : editFormData.date;
+      const isCampaign = editFormData.eventType === 'campaign';
+      const datesPayload = isCampaign && editFormData.dates && editFormData.dates.length > 0
+        ? editFormData.dates
+        : [editFormData.date];
+      const firstDate = isCampaign ? (datesPayload[0] || editFormData.date) : editFormData.date;
 
       const publishAtPayload = isEditScheduled ? (editPublishAt || null) : null;
 
@@ -316,6 +325,7 @@ export default function AdminPage() {
           id: editingGame.id,
           ...editFormData,
           date: firstDate,
+          dates: datesPayload,
           tags: tagsArray,
           publishAt: publishAtPayload,
         }),
@@ -351,18 +361,22 @@ export default function AdminPage() {
     }
   };
 
-  const handleToggleStatus = async (game: GameWithBookings) => {
-    const nextStatus = game.status === 'open' ? 'closed' : 'open';
+  const handleSetGameStatus = async (gameId: string, status: 'open' | 'closed' | 'archived') => {
     try {
       await fetch('/api/games', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gameId: game.id, status: nextStatus }),
+        body: JSON.stringify({ gameId, status }),
       });
       fetchGames();
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const handleToggleStatus = async (game: GameWithBookings) => {
+    const nextStatus = game.status === 'open' ? 'closed' : 'open';
+    await handleSetGameStatus(game.id, nextStatus);
   };
 
   const handleDeleteGame = async (gameId: string) => {
@@ -728,7 +742,10 @@ export default function AdminPage() {
                       type="date"
                       required
                       value={editFormData.date}
-                      onChange={(e) => setEditFormData({ ...editFormData, date: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditFormData({ ...editFormData, date: val, dates: [val] });
+                      }}
                       className="w-full px-3.5 py-2 rounded-xl bg-purple-950/70 border border-purple-700 text-white text-xs focus:border-yellow-300 focus:outline-none"
                     />
                   </div>
@@ -748,8 +765,24 @@ export default function AdminPage() {
                   />
                 </div>
 
+                {/* Статус анонса */}
+                <div>
+                  <label className="block text-xs font-semibold text-purple-200 mb-1">
+                    Статус анонса *
+                  </label>
+                  <select
+                    value={editFormData.status}
+                    onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value as 'open' | 'closed' | 'archived' })}
+                    className="w-full px-3.5 py-2 rounded-xl bg-purple-950/70 border border-purple-700 text-white text-xs focus:border-yellow-300 focus:outline-none"
+                  >
+                    <option value="open">🟢 Набор открыт</option>
+                    <option value="closed">🔴 Набор закрыт</option>
+                    <option value="archived">📦 В архиве (партия завершена)</option>
+                  </select>
+                </div>
+
                 {/* Место */}
-                <div className="md:col-span-2">
+                <div>
                   <label className="block text-xs font-semibold text-purple-200 mb-1">
                     Место / аудитория проведения *
                   </label>
@@ -1104,7 +1137,10 @@ export default function AdminPage() {
                       type="date"
                       required
                       value={newGame.date}
-                      onChange={(e) => setNewGame({ ...newGame, date: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setNewGame({ ...newGame, date: val, dates: [val] });
+                      }}
                       className="w-full px-3.5 py-2 rounded-xl bg-purple-950/70 border border-purple-700 text-white text-xs focus:border-yellow-300 focus:outline-none"
                     />
                   </div>
@@ -1226,18 +1262,90 @@ export default function AdminPage() {
           </section>
         )}
 
+        {/* Фильтры и вкладки анонсов */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-purple-900/40">
+          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-purple-950/70 border border-purple-800/40">
+            <button
+              onClick={() => setAdminTab('upcoming')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                adminTab === 'upcoming'
+                  ? 'bg-purple-800 text-yellow-300 shadow-sm'
+                  : 'text-purple-300 hover:text-white'
+              }`}
+            >
+              <span>🟢 Предстоящие</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-purple-950/80 border border-purple-700/60 text-purple-200">
+                {games.filter((g) => !g.isPast && g.status !== 'archived').length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setAdminTab('archive')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                adminTab === 'archive'
+                  ? 'bg-purple-800 text-yellow-300 shadow-sm'
+                  : 'text-purple-300 hover:text-white'
+              }`}
+            >
+              <Archive className="w-3.5 h-3.5" />
+              <span>📜 Архив прошедших</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-purple-950/80 border border-purple-700/60 text-purple-200">
+                {games.filter((g) => g.isPast || g.status === 'archived').length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setAdminTab('all')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                adminTab === 'all'
+                  ? 'bg-purple-800 text-yellow-300 shadow-sm'
+                  : 'text-purple-300 hover:text-white'
+              }`}
+            >
+              <span>Все анонсы</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-purple-950/80 border border-purple-700/60 text-purple-200">
+                {games.length}
+              </span>
+            </button>
+          </div>
+
+          <div className="text-xs text-purple-300/80">
+            Отображается:{' '}
+            <span className="text-yellow-300 font-bold">
+              {games.filter((g) => {
+                if (adminTab === 'upcoming') return !g.isPast && g.status !== 'archived';
+                if (adminTab === 'archive') return g.isPast || g.status === 'archived';
+                return true;
+              }).length}
+            </span>{' '}
+            из {games.length}
+          </div>
+        </div>
+
         {/* Список текущих игр */}
         <section className="space-y-6">
           {isLoading ? (
             <div className="text-center py-12 text-purple-300 font-pixy">
               Загружаем игры...
             </div>
-          ) : games.length === 0 ? (
+          ) : games.filter((g) => {
+              if (adminTab === 'upcoming') return !g.isPast && g.status !== 'archived';
+              if (adminTab === 'archive') return g.isPast || g.status === 'archived';
+              return true;
+            }).length === 0 ? (
             <div className="text-center py-12 glass-panel rounded-2xl p-6 text-purple-300 text-xs">
-              Анонсов пока нет.
+              {adminTab === 'archive'
+                ? 'В архиве пока нет завершенных партий.'
+                : adminTab === 'upcoming'
+                ? 'Нет активных предстоящих анонсов.'
+                : 'Анонсов пока нет.'}
             </div>
           ) : (
-            games.map((game) => {
+            games.filter((g) => {
+              if (adminTab === 'upcoming') return !g.isPast && g.status !== 'archived';
+              if (adminTab === 'archive') return g.isPast || g.status === 'archived';
+              return true;
+            }).map((game) => {
               const mainRoster = game.bookings.filter((b) => !b.isWaitlist);
               const waitlistRoster = game.bookings.filter((b) => b.isWaitlist);
               const isCampaign = game.eventType === 'campaign';
@@ -1284,6 +1392,11 @@ export default function AdminPage() {
                           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gradient-accent text-[#0B0741]">
                             🎉 Свободный вход (без записи)
                           </span>
+                        ) : game.status === 'archived' ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-950 text-purple-300 border border-purple-700 flex items-center gap-1">
+                            <Archive className="w-3 h-3 text-purple-400" />
+                            <span>В архиве</span>
+                          </span>
                         ) : (
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
                             game.status === 'open'
@@ -1294,7 +1407,7 @@ export default function AdminPage() {
                           </span>
                         )}
 
-                        {game.isPast && (
+                        {game.isPast && game.status !== 'archived' && (
                           <span className="px-2 py-0.5 rounded-full text-[10px] bg-purple-950 text-purple-400 border border-purple-800">
                             Прошедшая
                           </span>
@@ -1383,6 +1496,27 @@ export default function AdminPage() {
                               <span>Открыть</span>
                             </>
                           )}
+                        </button>
+                      )}
+
+                      {/* Отправить в архив / Вернуть из архива */}
+                      {game.status === 'archived' ? (
+                        <button
+                          onClick={() => handleSetGameStatus(game.id, 'open')}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-900/60 hover:bg-purple-800 border border-purple-500/40 text-purple-200 hover:text-white transition-colors cursor-pointer"
+                          title="Вернуть анонс из архива"
+                        >
+                          <ArchiveRestore className="w-3.5 h-3.5 text-yellow-300" />
+                          <span>Из архива</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleSetGameStatus(game.id, 'archived')}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-950/60 hover:bg-purple-900/80 border border-purple-700/50 text-purple-300 hover:text-white transition-colors cursor-pointer"
+                          title="Перевести анонс в архив"
+                        >
+                          <Archive className="w-3.5 h-3.5 text-purple-400" />
+                          <span>В архив</span>
                         </button>
                       )}
 

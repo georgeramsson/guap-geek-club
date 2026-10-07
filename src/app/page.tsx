@@ -30,7 +30,8 @@ import {
   HelpCircle, 
   LayoutGrid, 
   RotateCcw,
-  ExternalLink
+  ExternalLink,
+  Archive
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -39,7 +40,10 @@ export default function HomePage() {
   const [selectedGameForBooking, setSelectedGameForBooking] = useState<GameWithBookings | null>(null);
   const [isBookingOpen, setIsBookingOpen] = useState(false);
 
-  // Режим отображения: 'cards' (витрина) или 'calendar' (календарь)
+  // Режим отображения: 'upcoming' (предстоящие) или 'archive' (архив прошедших)
+  const [activeMainTab, setActiveMainTab] = useState<'upcoming' | 'archive'>('upcoming');
+
+  // Вид для предстоящих игр: 'cards' (витрина) или 'calendar' (календарь)
   const [viewMode, setViewMode] = useState<'cards' | 'calendar'>('cards');
   
   const [activeFilter, setActiveFilter] = useState('all');
@@ -65,9 +69,18 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, [fetchGames]);
 
+  // Обработка перехода по хэшу #archive или #game-id
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (window.location.hash === '#archive' || window.location.search.includes('tab=archive')) {
+        setActiveMainTab('archive');
+      }
+    }
+  }, []);
+
   // Обработка перехода по хэшу #game-id
   useEffect(() => {
-    if (!isLoading && typeof window !== 'undefined' && window.location.hash) {
+    if (!isLoading && typeof window !== 'undefined' && window.location.hash && window.location.hash !== '#archive') {
       const targetId = window.location.hash.slice(1);
       const elem = document.getElementById(targetId);
       if (elem) {
@@ -104,7 +117,25 @@ export default function HomePage() {
       return new Date(`${getSortDate(a)}T${timeA}`).getTime() - new Date(`${getSortDate(b)}T${timeB}`).getTime();
     });
 
-  const filteredGames = upcomingGames.filter((game) => {
+  // Архивные и прошедшие партии (от самых недавних к более давним)
+  const pastGames = games
+    .filter((g) => g.isPast || g.status === 'archived')
+    .sort((a, b) => {
+      const getSortDate = (g: GameWithBookings) => {
+        if (g.dates && g.dates.length > 0) {
+          const sorted = [...g.dates].sort();
+          return sorted[sorted.length - 1];
+        }
+        return g.date;
+      };
+      const timeA = (a.time?.match(/\d{1,2}:\d{2}/)?.[0] || '00:00').padStart(5, '0');
+      const timeB = (b.time?.match(/\d{1,2}:\d{2}/)?.[0] || '00:00').padStart(5, '0');
+      return new Date(`${getSortDate(b)}T${timeB}`).getTime() - new Date(`${getSortDate(a)}T${timeA}`).getTime();
+    });
+
+  const activeGamesList = activeMainTab === 'upcoming' ? upcomingGames : pastGames;
+
+  const filteredGames = activeGamesList.filter((game) => {
     const q = searchQuery.toLowerCase().trim();
     const matchesSearch = 
       !q ||
@@ -136,6 +167,10 @@ export default function HomePage() {
   }, 0);
   const totalRegisteredPlayers = upcomingGames.reduce((acc, g) => acc + g.playersCount, 0);
 
+  // Метрики архива
+  const pastRegisteredPlayers = pastGames.reduce((acc, g) => acc + g.playersCount, 0);
+  const uniquePastMasters = new Set(pastGames.map((g) => g.master)).size;
+
   return (
     <div className="min-h-screen flex flex-col stars-bg">
       <Header />
@@ -164,26 +199,53 @@ export default function HomePage() {
 
               {/* Метрики со стабильными табличными цифрами */}
               <div className="grid grid-cols-3 gap-2.5 sm:gap-3 max-w-md mx-auto md:mx-0">
-                <div className="p-3.5 rounded-xl bg-purple-950/50 border border-purple-800/30 text-center">
-                  <div className="text-2xl sm:text-3xl font-bold text-yellow-300 font-pixy tabular-nums">
-                    {activeUpcomingCount}
-                  </div>
-                  <div className="text-[11px] text-purple-300/80 mt-0.5">Ближайших игр</div>
-                </div>
+                {activeMainTab === 'upcoming' ? (
+                  <>
+                    <div className="p-3.5 rounded-xl bg-purple-950/50 border border-purple-800/30 text-center">
+                      <div className="text-2xl sm:text-3xl font-bold text-yellow-300 font-pixy tabular-nums">
+                        {activeUpcomingCount}
+                      </div>
+                      <div className="text-[11px] text-purple-300/80 mt-0.5">Ближайших игр</div>
+                    </div>
 
-                <div className="p-3.5 rounded-xl bg-purple-950/50 border border-purple-800/30 text-center">
-                  <div className="text-2xl sm:text-3xl font-bold text-emerald-400 font-pixy tabular-nums">
-                    {totalFreeSlots}
-                  </div>
-                  <div className="text-[11px] text-purple-300/80 mt-0.5">Свободных мест</div>
-                </div>
+                    <div className="p-3.5 rounded-xl bg-purple-950/50 border border-purple-800/30 text-center">
+                      <div className="text-2xl sm:text-3xl font-bold text-emerald-400 font-pixy tabular-nums">
+                        {totalFreeSlots}
+                      </div>
+                      <div className="text-[11px] text-purple-300/80 mt-0.5">Свободных мест</div>
+                    </div>
 
-                <div className="p-3.5 rounded-xl bg-purple-950/50 border border-purple-800/30 text-center">
-                  <div className="text-2xl sm:text-3xl font-bold text-purple-200 font-pixy tabular-nums">
-                    {totalRegisteredPlayers}
-                  </div>
-                  <div className="text-[11px] text-purple-300/80 mt-0.5">Игроков записано</div>
-                </div>
+                    <div className="p-3.5 rounded-xl bg-purple-950/50 border border-purple-800/30 text-center">
+                      <div className="text-2xl sm:text-3xl font-bold text-purple-200 font-pixy tabular-nums">
+                        {totalRegisteredPlayers}
+                      </div>
+                      <div className="text-[11px] text-purple-300/80 mt-0.5">Игроков записано</div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="p-3.5 rounded-xl bg-purple-950/50 border border-purple-800/30 text-center">
+                      <div className="text-2xl sm:text-3xl font-bold text-yellow-300 font-pixy tabular-nums">
+                        {pastGames.length}
+                      </div>
+                      <div className="text-[11px] text-purple-300/80 mt-0.5">Сыграно партий</div>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-purple-950/50 border border-purple-800/30 text-center">
+                      <div className="text-2xl sm:text-3xl font-bold text-emerald-400 font-pixy tabular-nums">
+                        {pastRegisteredPlayers}
+                      </div>
+                      <div className="text-[11px] text-purple-300/80 mt-0.5">Участников игр</div>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-purple-950/50 border border-purple-800/30 text-center">
+                      <div className="text-2xl sm:text-3xl font-bold text-purple-200 font-pixy tabular-nums">
+                        {uniquePastMasters}
+                      </div>
+                      <div className="text-[11px] text-purple-300/80 mt-0.5">Мастеров клуба</div>
+                    </div>
+                  </>
+                )}
               </div>
 
             </div>
@@ -204,30 +266,72 @@ export default function HomePage() {
 
         {/* Панель переключения режимов */}
         <section className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center p-1 rounded-xl bg-purple-950/70 border border-purple-800/40">
-            <button
-              onClick={() => setViewMode('cards')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                viewMode === 'cards'
-                  ? 'bg-gradient-accent text-[#0B0741] font-semibold shadow-sm'
-                  : 'text-purple-300 hover:text-white'
-              }`}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              <span>Витрина анонсов</span>
-            </button>
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Переключение Предстоящие / Архив */}
+            <div className="flex items-center p-1 rounded-xl bg-purple-950/70 border border-purple-800/40">
+              <button
+                onClick={() => setActiveMainTab('upcoming')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  activeMainTab === 'upcoming'
+                    ? 'bg-gradient-accent text-[#0B0741] shadow-sm'
+                    : 'text-purple-300 hover:text-white'
+                }`}
+              >
+                <Dices className="w-3.5 h-3.5" />
+                <span>Предстоящие игры</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                  activeMainTab === 'upcoming' ? 'bg-[#0B0741]/20 text-[#0B0741] font-bold' : 'bg-purple-900/60 text-purple-300'
+                }`}>
+                  {upcomingGames.length}
+                </span>
+              </button>
 
-            <button
-              onClick={() => setViewMode('calendar')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                viewMode === 'calendar'
-                  ? 'bg-gradient-accent text-[#0B0741] font-semibold shadow-sm'
-                  : 'text-purple-300 hover:text-white'
-              }`}
-            >
-              <CalendarIcon className="w-3.5 h-3.5" />
-              <span>Календарь событий</span>
-            </button>
+              <button
+                onClick={() => setActiveMainTab('archive')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  activeMainTab === 'archive'
+                    ? 'bg-gradient-accent text-[#0B0741] shadow-sm'
+                    : 'text-purple-300 hover:text-white'
+                }`}
+              >
+                <Archive className="w-3.5 h-3.5" />
+                <span>Архив партий</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                  activeMainTab === 'archive' ? 'bg-[#0B0741]/20 text-[#0B0741] font-bold' : 'bg-purple-900/60 text-purple-300'
+                }`}>
+                  {pastGames.length}
+                </span>
+              </button>
+            </div>
+
+            {/* Вид Витрина / Календарь для предстоящих игр */}
+            {activeMainTab === 'upcoming' && (
+              <div className="flex items-center p-1 rounded-xl bg-purple-950/70 border border-purple-800/40">
+                <button
+                  onClick={() => setViewMode('cards')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                    viewMode === 'cards'
+                      ? 'bg-purple-800 text-yellow-300 font-semibold shadow-sm'
+                      : 'text-purple-300 hover:text-white'
+                  }`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Витрина</span>
+                </button>
+
+                <button
+                  onClick={() => setViewMode('calendar')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                    viewMode === 'calendar'
+                      ? 'bg-purple-800 text-yellow-300 font-semibold shadow-sm'
+                      : 'text-purple-300 hover:text-white'
+                  }`}
+                >
+                  <CalendarIcon className="w-3.5 h-3.5" />
+                  <span>Календарь</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Быстрое обновление */}
@@ -242,7 +346,7 @@ export default function HomePage() {
         </section>
 
         {/* Если выбран режим КАЛЕНДАРЬ */}
-        {viewMode === 'calendar' ? (
+        {activeMainTab === 'upcoming' && viewMode === 'calendar' ? (
           <section className="mb-12">
             <CalendarView games={upcomingGames} onBookClick={handleOpenBooking} />
           </section>
@@ -306,7 +410,9 @@ export default function HomePage() {
                   <Dices className="w-10 h-10 text-purple-400/60 mx-auto mb-2.5" />
                   <h3 className="font-pixy text-lg text-white mb-1.5">Ничего не найдено</h3>
                   <p className="text-xs text-purple-300 max-w-sm mx-auto mb-4">
-                    По выбранным параметрам нет подходящих предстоящих игр.
+                    {activeMainTab === 'archive'
+                      ? 'В архиве клуба пока нет завершённых партий по выбранным параметрам.'
+                      : 'По выбранным параметрам нет подходящих предстоящих игр.'}
                   </p>
                   <button
                     onClick={() => { setActiveFilter('all'); setSearchQuery(''); }}
@@ -407,6 +513,13 @@ export default function HomePage() {
             Клуб настольных и ролевых игр Санкт-Петербургского государственного университета аэрокосмического приборостроения.
           </p>
           <div className="pt-1.5 flex flex-wrap justify-center gap-x-3 gap-y-1 text-[11px] font-medium">
+            <a 
+              href="/archive" 
+              className="text-purple-300 hover:text-yellow-300 transition-colors"
+            >
+              Архив партий клуба
+            </a>
+            <span>•</span>
             <a 
               href="https://vk.ru/guap_geek_club" 
               target="_blank" 
